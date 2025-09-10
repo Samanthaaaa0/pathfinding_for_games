@@ -32,53 +32,54 @@ class PIBT:
         self.rng.shuffle(candidate)  # tie-breaking, randomize
         candidate = sorted(candidate, key=lambda u: self.dist_tables[i].get(u))
 
-        # Check if swap is required and possible
-        k = None
+        # Check if swap is required and possible ONLY for the best candidate
+        j = None
         if len(candidate) > 1:  # Only check if there are actual neighbors
-            k = self.swap_required_and_possible(i, candidate[0], i_from)
+            j = self.swap_required_and_possible(i, candidate[0], i_from)
         
         # Line 4: If swap is needed, reverse candidate order
-        if k is not None:
-            candidate.reverse()
-            print(f"[PIBT_SWAP] Agent {i} reversed candidates due to swap with {k}")
-
-        # FIXED: Track potential swap candidates while trying all other options first
-        # potential_swap_candidates = set()
+        # This makes agent i try to move away from its goal first
+        if j is not None:
+            candidate = sorted(candidate, key=lambda u: self.dist_tables[i].get(u), reverse=True)
 
         # vertex assignment
         for v in candidate:
-
-            # added by samsam
-            # if v == i_from[i] and potential_swap_candidates:
-            #     break
-
             # avoid vertex collision
             if self.occupied_nxt[v] != self.NIL:
                 continue
 
-            j = self.occupied_now[v]
+            k = self.occupied_now[v]
 
             # avoid edge collision
-            if j != self.NIL and i_moveto[j] == i_moveto[i]:
+            if k != self.NIL and i_moveto[k] == i_moveto[i]:
                 continue
 
             # reserve next location
             i_moveto[i] = v
             self.occupied_nxt[v] = i
 
-            # priority inheritance (j != i due to the second condition)
+            # priority inheritance (k != i due to the second condition)
             if (
-                j != self.NIL
-                and (i_moveto[j] == self.NIL_COORD)
-                and (not self.funcPIBT(i_from, i_moveto, j))
+                k != self.NIL
+                and (i_moveto[k] == self.NIL_COORD)
+                and (not self.funcPIBT(i_from, i_moveto, k))
             ):
+                # Failed to move agent k, so we can't take this vertex
+                i_moveto[i] = self.NIL_COORD
+                self.occupied_nxt[v] = self.NIL
                 continue
 
-            if v == candidate[0] and k is not None and i_moveto[k] == self.NIL_COORD:
-                # Pull agent j to i's current location
-                i_moveto[k] = i_from[i]
-                self.occupied_nxt[i_from[i]] = k
-                print(f"[PIBT_SWAP] Executed swap: Agent {i} -> {v}, Agent {k} -> {i_from[i]}")
+            # Line 7: Execute swap if conditions are met
+            # Only when we successfully take the BEST vertex (from original order) 
+            # and we detected a swap was needed
+            if (j is not None and 
+                j < len(i_from) and  # Valid agent index
+                v == candidate[-1] and  # We took the worst vertex (due to reversal)
+                i_moveto[j] == self.NIL_COORD):  # Agent j not assigned yet
+                
+                # This means we're moving away from goal, so pull j to our current position
+                i_moveto[j] = i_from[i]
+                self.occupied_nxt[i_from[i]] = j
 
             return True
 
@@ -133,132 +134,72 @@ class PIBT:
                 break  # goal
 
         return configs
-    
-
 
     def swap_required_and_possible(self, i: int, target_vertex: Coord, i_from: Config) -> Optional[int]:
         """
-        Pattern detector for swap requirement and possibility.
+        Conservative pattern detector - only triggers when livelock is likely.
         Returns agent ID j if swap with agent i is required and possible, None otherwise.
         """
         # Check if there's an agent j at the target vertex
         j = None
         for agent_id, pos in enumerate(i_from):
-            if pos == target_vertex:
+            if pos == target_vertex and agent_id != i:
                 j = agent_id
                 break
         
-        if j is None or j == i:
+        if j is None:
             return None
-            
-        # Only consider swap if current vertex has degree <= 2
-        if self.get_vertex_degree(i_from[i]) > 2:
-            return None
-            
-        print(f"[SWAP_DETECTOR] Checking swap requirement for agents {i} and {j}")
         
-        # First emulation: Check if swap is required
-        swap_required = self.emulate_swap_necessity(i, j, i_from)
-        if not swap_required:
-            print(f"[SWAP_DETECTOR] Swap not required for {i} and {j}")
+        # Only consider swap in very constrained situations
+        # Both positions should be in narrow corridors (degree <= 2)
+        if (self.get_vertex_degree(i_from[i]) > 2 or 
+            self.get_vertex_degree(target_vertex) > 2):
+            return None
+        
+        # Check if this looks like a potential livelock scenario
+        # using simplified emulation that's more conservative
+        if not self.is_livelock_scenario(i, j, i_from):
             return None
             
-        # Second emulation: Check if swap is possible  
-        swap_possible = self.emulate_swap_possibility(i, j, i_from)
-        if not swap_possible:
-            print(f"[SWAP_DETECTOR] Swap not possible for {i} and {j}")
-            return None
-            
-        print(f"[SWAP_DETECTOR] Swap required and possible: {i} <-> {j}")
         return j
 
-    def emulate_swap_necessity(self, i: int, j: int, i_from: Config) -> bool:
+    def is_livelock_scenario(self, i: int, j: int, i_from: Config) -> bool:
         """
-        First emulation: Check if swap is necessary.
-        Move i to j's location while moving j away, ignoring other agents.
+        Conservative check for livelock scenarios.
+        Only returns True when swap is really necessary.
         """
-        current_i = i_from[i]
-        current_j = i_from[j]
+        pos_i = i_from[i]
+        pos_j = i_from[j] 
         goal_i = self.goals[i]
         goal_j = self.goals[j]
         
-        simulation_steps = 0
-        max_steps = 10  # Prevent infinite loops
+        # Quick check: if both agents want to go toward each other's positions
+        # and are in a narrow corridor, this could be livelock
         
-        while simulation_steps < max_steps:
-            # Move i toward j's current position
-            current_i = current_j
+        # Check if i's goal is in the direction of j's position
+        neighbors_i = get_neighbors(self.grid, pos_i)
+        if pos_j not in neighbors_i:
+            return False
             
-            # Move j to another vertex (not i's location)
-            j_neighbors = [n for n in get_neighbors(self.grid, current_j) 
-                          if n != current_i and is_valid_coord(self.grid, n)]
-            
-            if not j_neighbors:
-                break
-                
-            # Move j toward its goal among available neighbors
-            current_j = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
-            
-            # Check stopping conditions
-            # (i) Swap not required: j's location has degree > 2
-            if self.get_vertex_degree(current_j) > 2:
-                return False
-                
-            # (ii) Swap required: j's location has degree 1, or i reaches goal while j's nearest neighbor toward goal is i's goal
-            if self.get_vertex_degree(current_j) == 1:
-                return True
-                
-            if current_i == goal_i:
-                # Check if j's nearest neighbor toward its goal is i's goal
-                j_neighbors = [n for n in get_neighbors(self.grid, current_j) if is_valid_coord(self.grid, n)]
-                if j_neighbors:
-                    nearest_to_goal = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
-                    if nearest_to_goal == goal_i:
-                        return True
-                        
-            simulation_steps += 1
-            
-        return False
-
-    def emulate_swap_possibility(self, i: int, j: int, i_from: Config) -> bool:
-        """
-        Second emulation: Check if swap is possible.
-        Move j to i's location while moving i away.
-        """
-        current_i = i_from[i]
-        current_j = i_from[j]
+        # Check if they're in a "facing" situation in a narrow corridor
+        degree_i = self.get_vertex_degree(pos_i)
+        degree_j = self.get_vertex_degree(pos_j)
         
-        simulation_steps = 0
-        max_steps = 10
+        # Only trigger in very narrow situations
+        if degree_i > 2 or degree_j > 2:
+            return False
+            
+        # Check if moving normally would create a cycle
+        # This is a simplified version - in practice, you might want more sophisticated detection
+        dist_i_via_j = self.dist_tables[i].get(pos_j)
+        dist_i_direct = self.dist_tables[i].get(pos_i)
         
-        while simulation_steps < max_steps:
-            # Move j toward i's current position
-            current_j = current_i
+        # Only swap if going through j's position is actually better for i
+        if dist_i_via_j >= dist_i_direct:
+            return False
             
-            # Move i to another vertex
-            i_neighbors = [n for n in get_neighbors(self.grid, current_i) 
-                          if n != current_j and is_valid_coord(self.grid, n)]
-            
-            if not i_neighbors:
-                break
-                
-            # Move i toward its goal among available neighbors
-            current_i = min(i_neighbors, key=lambda v: self.dist_tables[i].get(v))
-            
-            # Check stopping conditions
-            # (i) Swap possible: i's location has degree > 2
-            if self.get_vertex_degree(current_i) > 2:
-                return True
-                
-            # (ii) Swap impossible: i is on vertex with degree 1
-            if self.get_vertex_degree(current_i) == 1:
-                return False
-                
-            simulation_steps += 1
-            
-        return False
+        return True
 
     def get_vertex_degree(self, v: Coord) -> int:
         """Get the degree of a vertex (number of valid neighbors)"""
         return len([n for n in get_neighbors(self.grid, v) if is_valid_coord(self.grid, n)])
-
