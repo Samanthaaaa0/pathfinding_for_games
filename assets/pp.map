@@ -1,0 +1,124 @@
+-----
+1
+
+version 1
+3	pushmap.map	5	6	2	1	5	0	13.65685425
+7	pushmap.map	5	6	3	1	1	1	30.89949493
+4	pushmap.map	5	6	2	0	2	0	20.89949493
+1	pushmap.map	5	6	1	0	1	0	10.22222211
+1	pushmap.map	5	6	0	1	0	1	10.22222211
+1	pushmap.map	5	6	0	2	0	2	10.22222211
+1	pushmap.map	5	6	2	1	2	1	10.22222211
+
+type octile
+height 5
+width 6
+map
+...@@.
+......
+..@@@@
+@@@@@@
+@@@@@@
+
+-----
+2
+- invalid solution
+
+type octile
+height 5
+width 5
+map
+..@@.
+.....
+.@@@@
+@@@@@
+@@@@@
+
+version 1
+3	pushmap.map	5	5	1	1	4	0	13.65685425
+7	pushmap.map	5	5	2	1	0	1	30.89949493
+4	pushmap.map	5	5	1	0	1	0	20.89949493
+1	pushmap.map	5	5	0	0	0	0	10.22222211
+2	pushmap.map	5	5	0	2	0	2	10.22222211
+
+-----
+3
+
+type octile
+height 5
+width 6
+map
+...@@.
+......
+..@@@@
+@@@@@@
+@@@@@@
+
+version 1
+3	pushmap.map	5	6	2	1	5	0	13.65685425
+7	pushmap.map	5	6	3	1	1	1	30.89949493
+4	pushmap.map	5	6	2	0	2	0	20.89949493
+1	pushmap.map	5	6	1	0	1	0	10.22222211
+2	pushmap.map	5	6	1	2	1	2	10.22222211
+
+-----
+4
+- success
+- problem: blue will go back and forth even it has reached its goal
+
+type octile
+height 5
+width 5
+map
+...@.
+.....
+..@@@
+@@@@@
+@@@@@
+
+version 1
+3	pushmap.map	5	5	1	1	4	0	13.65685425
+7	pushmap.map	5	5	2	1	0	1	30.89949493
+4	pushmap.map	5	5	1	0	1	0	20.89949493
+2	pushmap.map	5	5	3	1	2	1	70.22222211
+5	pushmap.map	5	5	1	2	1	2	75.23421000
+
+-----
+5
+vertex blocking path way
+- success
+
+type octile
+height 5
+width 6
+map
+..@@@.
+......
+..@@@@
+@@@@@@
+@@@@@@
+
+version 1
+3	pushmap.map	5	5	5	1	5	0	13.65685425
+7	pushmap.map	5	5	5	0	1	1	30.89949493
+4	pushmap.map	5	5	3	1	3	1	20.89949493
+2	pushmap.map	5	5	1	0	1	0	70.22222211
+5	pushmap.map	5	5	0	1	0	1	75.23421000
+
+------
+6
+type octile
+height 5
+width 6
+map
+..@@@.
+......
+.@@@@@
+@@@@@@
+@@@@@@
+
+version 1
+3	pushmap.map	5	6	2	1	5	0	13.65685425
+7	pushmap.map	5	6	3	1	1	1	30.89949493
+4	pushmap.map	5	6	4	1	2	1	20.89949493
+2	pushmap.map	5	6	1	0	1	0	70.22222211

@@ -1,0 +1,5 @@
+numpy
+heapq
+
+coverage>=6.0
+pytest>=7.0
