@@ -114,11 +114,11 @@ class PIBT:
             return True
         
         if i == root_agent and potential_swap_candidates:
-            print(f"[PIBT] Root agent {i} exhausted all candidates, trying swaps...")
-            print("i: ",i, "at", i_from[i], "priority: ",)
-            [print(_) for _ in range(len(i_from)) if i_from[_]==(8,11)]
-            print("candidate", candidate)
-            exit()
+            # print(f"[PIBT] Root agent {i} exhausted all candidates, trying swaps...")
+            # print("i: ",i, "at", i_from[i], "priority: ",)
+            # [print(_) for _ in range(len(i_from)) if i_from[_]==(8,11)]
+            # print("candidate", candidate)
+            # exit()
             i_moveto[i] = v
             self.occupied_nxt[v] = i
             
@@ -136,7 +136,7 @@ class PIBT:
         # failed to secure node
         i_moveto[i] = i_from[i]
         self.occupied_nxt[i_from[i]] = i
-        print(f"[PIBT] Agent {i} failed to move, staying at {i_from[i]}")
+        # print(f"[PIBT] Agent {i} failed to move, staying at {i_from[i]}")
         return False
 
     def step(self, i_from: Config, priorities: list[float]) -> Config:
@@ -1154,7 +1154,7 @@ class PIBT:
         if len(configs) <= 1:
             return configs
         
-        print(f"[SMOOTH] Removing duplicates from {len(configs)} configurations")
+        # print(f"[SMOOTH] Removing duplicates from {len(configs)} configurations")
         
         # Remove consecutive duplicates
         cleaned_configs = [configs[0]]  # Always keep first config
@@ -1162,13 +1162,13 @@ class PIBT:
         for i in range(1, len(configs)):
             if configs[i] != cleaned_configs[-1]:  # Only add if different from last
                 cleaned_configs.append(configs[i])
-            else:
-                print(f"[SMOOTH] Removed duplicate at step {i}: {configs[i]}")
+            # else:
+        #         print(f"[SMOOTH] Removed duplicate at step {i}: {configs[i]}")
         
-        print(f"[SMOOTH] Final configuration count: {len(cleaned_configs)}")
+        # print(f"[SMOOTH] Final configuration count: {len(cleaned_configs)}")
         return cleaned_configs
 
-    '''PATTERN DETECTOR IMPLEMENTATION'''
+    '''PATTERN DETECTOR IMPLEMENTATION
     def swap_required_and_possible(self, i: int, target_vertex: Coord, i_from: Config) -> Optional[int]:
         """
         Pattern detector for swap requirement and possibility.
@@ -1294,7 +1294,7 @@ class PIBT:
     def get_vertex_degree(self, v: Coord) -> int:
         """Get the degree of a vertex (number of valid neighbors)"""
         return len([n for n in get_neighbors(self.grid, v) if is_valid_coord(self.grid, n)])
-
+    '''
 
 
 
