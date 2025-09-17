@@ -3,17 +3,17 @@
 import argparse
 import os
 
-# from pibt.pibt_new import (
-#     PIBT
-# )
+from pibt.pibt_new import (
+    PIBT
+)
 
 # from pibt.oriori import (
 #     PIBT
 # )
 
-from pibt.oripibt import (
-    PIBT
-)
+# from pibt.oripibt import (
+#     PIBT
+# )
 
 from pibt.utils import (
     parse_map, 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=5000)
+    parser.add_argument("--max-timestep", type=int, default=100000)
     args = parser.parse_args()
 
     # define problem instance

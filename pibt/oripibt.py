@@ -35,8 +35,8 @@ class PIBT:
         # Check if swap is required and possible ONLY for the best candidate
         swaping_agent = None
         if len(C) > 1:  # Only check if there are actual neighbors
-            pass
-            #j = self.swap_required_and_possible(i, C[0], Q_from)
+            # pass
+            swaping_agent = self.swap_required_and_possible(i, C[0], Q_from)
 
         # Line 4: If swap is needed, reverse candidate order
         # This makes agent i try to move away from its goal first
@@ -149,7 +149,7 @@ class PIBT:
         if target_vertex in i_from:
             j = i_from.index(target_vertex)
 
-        assert i!=j, f"i={i},j={j},FUCK YOU"
+        assert i!=j, f"i={i},j={j},---"
 
         if j is None:
             return None
@@ -257,73 +257,6 @@ class PIBT:
                 return False
                 
             # simulation_steps += 1
-            
-        
-
-    # def swap_required_and_possible(self, i: int, target_vertex: Coord, i_from: Config) -> Optional[int]:
-    #     """
-    #     Conservative pattern detector - only triggers when livelock is likely.
-    #     Returns agent ID j if swap with agent i is required and possible, None otherwise.
-    #     """
-    #     # Check if there's an agent j at the target vertex
-    #     j = None
-    #     for agent_id, pos in enumerate(i_from):
-    #         if pos == target_vertex and agent_id != i:
-    #             j = agent_id
-    #             break
-        
-    #     if j is None:
-    #         return None
-        
-    #     # Only consider swap in very constrained situations
-    #     # Both positions should be in narrow corridors (degree <= 2)
-    #     if (self.get_vertex_degree(i_from[i]) > 2 or 
-    #         self.get_vertex_degree(target_vertex) > 2):
-    #         return None
-        
-    #     # Check if this looks like a potential livelock scenario
-    #     # using simplified emulation that's more conservative
-    #     if not self.is_livelock_scenario(i, j, i_from):
-    #         return None
-            
-    #     return j
-
-    # def is_livelock_scenario(self, i: int, j: int, i_from: Config) -> bool:
-    #     """
-    #     Conservative check for livelock scenarios.
-    #     Only returns True when swap is really necessary.
-    #     """
-    #     pos_i = i_from[i]
-    #     pos_j = i_from[j] 
-    #     goal_i = self.goals[i]
-    #     goal_j = self.goals[j]
-        
-    #     # Quick check: if both agents want to go toward each other's positions
-    #     # and are in a narrow corridor, this could be livelock
-        
-    #     # Check if i's goal is in the direction of j's position
-    #     neighbors_i = get_neighbors(self.grid, pos_i)
-    #     if pos_j not in neighbors_i:
-    #         return False
-            
-    #     # Check if they're in a "facing" situation in a narrow corridor
-    #     degree_i = self.get_vertex_degree(pos_i)
-    #     degree_j = self.get_vertex_degree(pos_j)
-        
-    #     # Only trigger in very narrow situations
-    #     if degree_i > 2 or degree_j > 2:
-    #         return False
-            
-    #     # Check if moving normally would create a cycle
-    #     # This is a simplified version - in practice, you might want more sophisticated detection
-    #     dist_i_via_j = self.dist_tables[i].get(pos_j)
-    #     dist_i_direct = self.dist_tables[i].get(pos_i)
-        
-    #     # Only swap if going through j's position is actually better for i
-    #     if dist_i_via_j >= dist_i_direct:
-    #         return False
-            
-    #     return True
 
     def get_vertex_degree(self, v: Coord) -> int:
         """Get the degree of a vertex (number of valid neighbors)"""
