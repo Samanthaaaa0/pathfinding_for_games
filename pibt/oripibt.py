@@ -32,19 +32,17 @@ class PIBT:
         self.rng.shuffle(C)  # tie-breaking, randomize
         C = sorted(C, key=lambda u: self.dist_tables[i].get(u))
 
+        original_best = C[1] if len(C) > 1 else C[0]
+
         # Check if swap is required and possible ONLY for the best candidate
         swaping_agent = None
         if len(C) > 1:  # Only check if there are actual neighbors
-            # pass
-            swaping_agent = self.swap_required_and_possible(i, C[0], Q_from)
+            swaping_agent = self.swap_required_and_possible(i, original_best, Q_from)
 
         # Line 4: If swap is needed, reverse candidate order
         # This makes agent i try to move away from its goal first
         if swaping_agent is not None:
-            # print(C)
-            print(f"i={i} needs to swap with j={swaping_agent}")
             C = list(reversed(C))
-            # print(C)
 
 
         # vertex assignment
@@ -66,8 +64,10 @@ class PIBT:
             # priority inheritance (j != i due to the second condition)
             if (
                 j != self.NIL
+                and swaping_agent != j
                 and (Q_to[j] == self.NIL_COORD)
                 and (not self.funcPIBT(Q_from, Q_to, j))
+                
             ):
                 continue
 
@@ -75,10 +75,10 @@ class PIBT:
             # Only when we successfully take the BEST vertex (from original order) 
             # and we detected a swap was needed
             if (swaping_agent is not None and 
-                #j < len(i_from) and  # Valid agent index
-                v == C[0] and  
+                v == original_best and
                 Q_to[swaping_agent] == self.NIL_COORD):  # Agent j not assigned yet
-                print(f"i={i} needs to swap with j={swaping_agent}")
+
+                # print(f"i={i} needs to swap with j={swaping_agent}")
                 # This means we're moving away from goal, so pull j to our current position
                 Q_to[swaping_agent] = Q_from[i]
                 self.occupied_nxt[Q_from[i]] = swaping_agent
@@ -137,7 +137,7 @@ class PIBT:
 
         return configs
     
-    def swap_required_and_possible(self, i: int, target_vertex: Coord, i_from: Config) -> Optional[int]:
+    def swap_required_and_possible(self, i: int, target_vertex: Coord, Q_from: Config) -> Optional[int]:
         """
         Pattern detector for swap requirement and possibility.
         Returns agent ID j if swap with agent i is required and possible, None otherwise.
@@ -146,118 +146,125 @@ class PIBT:
         j = None
 
         #for pos in get_neighbors(self.grid, i_from[i]):
-        if target_vertex in i_from:
-            j = i_from.index(target_vertex)
+        if target_vertex in Q_from and self.occupied_now[target_vertex] != self.NIL:
+            # j = Q_from.index(target_vertex)
+            j = self.occupied_now[target_vertex]
 
-        assert i!=j, f"i={i},j={j},---"
+        # assert i!=j, print(f"i={i},j={j},---")
 
         if j is None:
             return None
             
         # Only consider swap if current vertex has degree <= 2
-        if self.get_vertex_degree(i_from[i]) > 2:
+        if self.get_vertex_degree(Q_from[i]) > 2:
             return None
-            
-        # print(f"[SWAP_DETECTOR] Checking swap requirement for agents {i} and {j}")
 
         # First emulation: Check if swap is required
-        if not self.emulate_swap_necessity(i, j, i_from):
+        if not self.emulate_swap_necessity(i, j, Q_from):
             # print(f"[SWAP_DETECTOR] Swap not required for {i} and {j}")
             return None
 
         # Second emulation: Check if swap is possible
-        if not self.emulate_swap_possibility(i, j, i_from):
+        if not self.emulate_swap_possibility(i, j, Q_from):
             # print(f"[SWAP_DETECTOR] Swap not possible for {i} and {j}")
             return None
             
         # print(f"[SWAP_DETECTOR] Swap required and possible: {i} <-> {j}")
         return j
 
-    def emulate_swap_necessity(self, i: int, j: int, i_from: Config) -> bool:
+    def emulate_swap_necessity(self, i: int, j: int, Q_from: Config) -> bool:
         """
         First emulation: Check if swap is necessary.
         Move i to j's location while moving j away, ignoring other agents.
         """
-        current_i = i_from[i]
-        current_j = i_from[j]
+        current_i = Q_from[i]
+        current_j = Q_from[j]
         goal_i = self.goals[i]
-        goal_j = self.goals[j]
         
-        # simulation_steps = 0
-        # max_steps = 10  # Prevent infinite loops
-
+        # Track states to detect cycles (minimal addition to prevent infinite loops)
+        seen_states = set()
+        
         while True:
+            state = (current_i, current_j)
+            if state in seen_states:
+                # Cycle detected - paper doesn't specify this case, assume swap not required
+                return False
+            seen_states.add(state)
             # Move i toward j's current position
             current_i = current_j
             
             # Move j to another vertex (not i's location)
             j_neighbors = [n for n in get_neighbors(self.grid, current_j) 
-                          if n != current_i]
+                        if n != current_i]
             
             if not j_neighbors:
-                break
+                # j has nowhere to go, treat as degree 1
+                return True
                 
             # Move j toward its goal among available neighbors
             current_j = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
             
-            # Check stopping conditions
+            # Check stopping conditions exactly as paper says:
+            j_degree = self.get_vertex_degree(current_j)
+            
             # (i) Swap not required: j's location has degree > 2
-            if self.get_vertex_degree(current_j) > 2:
+            if j_degree > 2:
                 return False
                 
-            # (ii) Swap required: j's location has degree 1, or i reaches goal while j's nearest neighbor toward goal is i's goal
-            #if self.get_vertex_degree(current_j) == 1:
-                # return True
-            
+            # (ii) Swap required: j's location has degree = 1
+            if j_degree == 1:
+                return True
+                
+            # (ii) Swap required: i reaches goal while j's nearest neighbor toward goal is goal_i
             if current_i == goal_i:
-                # Check if j's nearest neighbor toward its goal is i's goal
-                j_neighbors = [n for n in get_neighbors(self.grid, current_j)]
-                #if j_neighbors:
-                nearest_to_goal = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
-                if nearest_to_goal == goal_i:
-                    return True
-                        
-            #simulation_steps += 1
-            
-        return False
+                j_all_neighbors = [n for n in get_neighbors(self.grid, current_j)]
+                if j_all_neighbors:
+                    nearest_to_j_goal = min(j_all_neighbors, key=lambda v: self.dist_tables[j].get(v))
+                    if nearest_to_j_goal == goal_i:
+                        return True
 
-    def emulate_swap_possibility(self, i: int, j: int, i_from: Config) -> bool:
+    def emulate_swap_possibility(self, i: int, j: int, Q_from: Config) -> bool:
         """
         Second emulation: Check if swap is possible.
         Move j to i's location while moving i away.
         """
-        current_i = i_from[i]
-        current_j = i_from[j]
+        current_i = Q_from[i]
+        current_j = Q_from[j]
         
-        # simulation_steps = 0
-        # max_steps = 10
+        # Track states to detect cycles (minimal addition to prevent infinite loops)
+        seen_states = set()
         
-        # while simulation_steps < max_steps:
         while True:
+            state = (current_i, current_j)
+            if state in seen_states:
+                # Cycle detected - paper doesn't specify this case, assume swap not possible
+                return False
+            seen_states.add(state)
             # Move j toward i's current position
             current_j = current_i
             
             # Move i to another vertex
             i_neighbors = [n for n in get_neighbors(self.grid, current_i) 
-                       if n != current_j and is_valid_coord(self.grid, n)]
+                        if n != current_j]
             
             if not i_neighbors:
+                # i has nowhere to go, treat as degree 1
                 return False
                 
             # Move i toward its goal among available neighbors
             current_i = min(i_neighbors, key=lambda v: self.dist_tables[i].get(v))
             
-            # Check stopping conditions
+            # Check stopping conditions exactly as paper says:
+            i_degree = self.get_vertex_degree(current_i)
+            
             # (i) Swap possible: i's location has degree > 2
-            if self.get_vertex_degree(current_i) > 2:
+            if i_degree > 2:
                 return True
                 
-            # (ii) Swap impossible: i is on vertex with degree 1
-            if self.get_vertex_degree(current_i) == 1:
+            # (ii) Swap impossible: i is on vertex with degree = 1
+            if i_degree == 1:
                 return False
-                
-            # simulation_steps += 1
-
+    
     def get_vertex_degree(self, v: Coord) -> int:
         """Get the degree of a vertex (number of valid neighbors)"""
         return len([n for n in get_neighbors(self.grid, v) if is_valid_coord(self.grid, n)])

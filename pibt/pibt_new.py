@@ -47,7 +47,7 @@ class PIBT:
         self.wait_until = [0] * self.num_agents  # timestep when agent can move again
         self.active_swaps = []  # List[SwapGroup]
 
-    def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None, swap: bool = False) -> bool:
+    def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None) -> bool:
         """
         Recursive function to implement the PIBT algorithm.
         root_agent tracks the original high-priority agent that started the chain.
@@ -58,12 +58,8 @@ class PIBT:
         if self.restore:
             return self.handle_restore_agent(i, i_from, i_moveto)
 
-        # Set root_agent to current agent if this is the top-level call
-        if root_agent is None:
-            root_agent = i
-
         # get candidate configurations
-        candidate = [i_from[i]] + list(get_neighbors(self.grid, i_from[i]))
+        candidate = [i_from[i]] + get_neighbors(self.grid, i_from[i])
         self.rng.shuffle(candidate)  # tie-breaking, randomize
         candidate = sorted(candidate, key=lambda u: self.dist_tables[i].get(u))
 
@@ -71,7 +67,12 @@ class PIBT:
 
         for v in candidate:
 
-            if v == i_from[i] and potential_swap_candidates:
+            '''
+            PIBT invalid condition:
+            - root agent: best case is stay in place -- v == i_from[i]
+            - inherited agents: exhausted all five candidates
+            '''
+            if i == root_agent and v == i_from[i] and potential_swap_candidates:
                 break
 
             # Check for vertex conflict - exclude nodes that are already requested by others
@@ -94,24 +95,17 @@ class PIBT:
                 and (i_moveto[j] == self.NIL_COORD)
                 and (not self.funcPIBT(i_from, i_moveto, j, root_agent))  # Pass root_agent down
             ):
-                
-                # i_moveto[i] = self.NIL_COORD
-                # self.occupied_nxt[v] = self.NIL
 
                 # save as potential swap candidate
                 if i == root_agent:
                     potential_swap_candidates.add((j, v))
-                    # print("Potential swap:", potential_swap_candidates)
                 continue 
             
             # Success! Found a valid move
             return True
         
-        if swap and i == root_agent and potential_swap_candidates:
-            print(f"[PIBT] Root agent {i} exhausted all candidates, trying swaps...")
-            # print("i: ",i, "at", i_from[i], "priority: ",)
-            # [print(_) for _ in range(len(i_from)) if i_from[_]==(8,11)]
-            # print("candidate", candidate)
+        if i == root_agent and potential_swap_candidates:
+
             i_moveto[i] = v
             self.occupied_nxt[v] = i
             
@@ -129,7 +123,7 @@ class PIBT:
         # failed to secure node
         i_moveto[i] = i_from[i]
         self.occupied_nxt[i_from[i]] = i
-        # print(f"[PIBT] Agent {i} failed to move, staying at {i_from[i]}")
+
         return False
 
     def step(self, i_from: Config, priorities: list[float]) -> Config:
@@ -146,7 +140,7 @@ class PIBT:
         A = sorted(list(range(N)), key=lambda i: priorities[i], reverse=True)
         for i in A:
             if i_moveto[i] == self.NIL_COORD:
-                self.funcPIBT(i_from, i_moveto, i, i, swap=True)
+                self.funcPIBT(i_from, i_moveto, i, i)
 
         # cleanup
         for i in range(N):
@@ -208,8 +202,8 @@ class PIBT:
 
         configs = self.remove_redundant_moves(configs)
 
-        for i in range(len(configs)):
-            print(f"Step {i}: {configs[i]}")
+        # for i in range(len(configs)):
+        #     print(f"Step {i}: {configs[i]}")
 
         return configs
     
