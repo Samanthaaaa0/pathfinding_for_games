@@ -47,6 +47,8 @@ class PIBT:
         self.wait_until = [0] * self.num_agents  # timestep when agent can move again
         self.active_swaps = []  # List[SwapGroup]
 
+        self.max_root_wait = 3
+
     def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None) -> bool:
         """
         Recursive function to implement the PIBT algorithm.
@@ -67,13 +69,33 @@ class PIBT:
 
         for v in candidate:
 
+            if i == root_agent and v == i_from[i]:
+                # ensure wait count tracking
+                if not hasattr(self, "root_wait_count"):
+                    self.root_wait_count = {}
+                if i not in self.root_wait_count:
+                    self.root_wait_count[i] = 0
+
+                if potential_swap_candidates:
+                    # If already waited enough → don't allow staying in place
+                    if self.root_wait_count[i] >= self.max_root_wait:
+                        break
+                    else:
+                        # Allow bounded waiting
+                        self.root_wait_count[i] += 1
+                # If no swap candidates exist, allow staying as fallback
+                # (root_wait_count still increments so it won’t stay forever)
+                else:
+                    self.root_wait_count[i] += 1
+
             '''
             PIBT invalid condition:
-            - root agent: best case is stay in place -- v == i_from[i]
+            - root agent: worst case is stay in place -- v == i_from[i]
             - inherited agents: exhausted all five candidates
             '''
-            if i == root_agent and v == i_from[i] and potential_swap_candidates:
-                break
+            # if i == root_agent and v == i_from[i] and potential_swap_candidates:
+            #     print("ya~",end=' ')
+            #     break
 
             # Check for vertex conflict - exclude nodes that are already requested by others
             if self.occupied_nxt[v] != self.NIL:
@@ -105,14 +127,13 @@ class PIBT:
             return True
         
         if i == root_agent and potential_swap_candidates:
-
-            i_moveto[i] = v
-            self.occupied_nxt[v] = i
-            
             # Try swaps in order of preference (closest to goal first)
-            list(potential_swap_candidates).sort(key=lambda x: self.dist_tables[i].get(x[1]))
-            
-            for j, v in potential_swap_candidates:
+            sorted_candidates = sorted(
+                potential_swap_candidates,
+                key=lambda x: self.dist_tables[i].get(x[1])
+            )
+
+            for j, v in sorted_candidates:
                 print(f"[PIBT] Root agent {i} trying swap with {j} at vertex {v}")
                 if self.try_swap(i, j, i_from, i_moveto):
                     print(f"[PIBT] Swap success: A{i} <-> A{j}")

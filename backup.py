@@ -58,30 +58,21 @@ class PIBT:
         if self.restore:
             return self.handle_restore_agent(i, i_from, i_moveto)
 
-        # Set root_agent to current agent if this is the top-level call
-        if root_agent is None:
-            root_agent = i
-
         # get candidate configurations
-        candidate = [i_from[i]] + list(get_neighbors(self.grid, i_from[i]))
+        candidate = [i_from[i]] + get_neighbors(self.grid, i_from[i])
         self.rng.shuffle(candidate)  # tie-breaking, randomize
         candidate = sorted(candidate, key=lambda u: self.dist_tables[i].get(u))
 
-        # Check if swap is required and possible
-        k = None
-        if len(candidate) > 1:  # Only check if there are actual neighbors
-            k = self.swap_required_and_possible(i, candidate[0], i_from)
-        
-        # Line 4: If swap is needed, reverse candidate order
-        if k is not None:
-            candidate.reverse()
-            print(f"[PIBT_SWAP] Agent {i} reversed candidates due to swap with {k}")
-
-        # FIXED: Track potential swap candidates while trying all other options first
         potential_swap_candidates = set()
 
         for v in candidate:
-            if v == i_from[i] and potential_swap_candidates:
+
+            '''
+            PIBT invalid condition:
+            - root agent: best case is stay in place -- v == i_from[i]
+            - inherited agents: exhausted all five candidates
+            '''
+            if i == root_agent and v == i_from[i] and potential_swap_candidates:
                 break
 
             # Check for vertex conflict - exclude nodes that are already requested by others
@@ -104,28 +95,16 @@ class PIBT:
                 and (i_moveto[j] == self.NIL_COORD)
                 and (not self.funcPIBT(i_from, i_moveto, j, root_agent))  # Pass root_agent down
             ):
-                
-                i_moveto[i] = self.NIL_COORD
-                self.occupied_nxt[v] = self.NIL
 
                 # save as potential swap candidate
                 if i == root_agent:
                     potential_swap_candidates.add((j, v))
-                    print("Potential swap:", potential_swap_candidates)
-
                 continue 
-
-            if v == candidate[0] and k is not None and i_moveto[k] == self.NIL_COORD:
-                # Pull agent j to i's current location
-                i_moveto[k] = i_from[i]
-                self.occupied_nxt[i_from[i]] = k
-                print(f"[PIBT_SWAP] Executed swap: Agent {i} -> {v}, Agent {k} -> {i_from[i]}")
-
+            
             # Success! Found a valid move
             return True
         
         if i == root_agent and potential_swap_candidates:
-            print(f"[PIBT] Root agent {i} exhausted all candidates, trying swaps...")
 
             i_moveto[i] = v
             self.occupied_nxt[v] = i
@@ -144,7 +123,7 @@ class PIBT:
         # failed to secure node
         i_moveto[i] = i_from[i]
         self.occupied_nxt[i_from[i]] = i
-        print(f"[PIBT] Agent {i} failed to move, staying at {i_from[i]}")
+
         return False
 
     def step(self, i_from: Config, priorities: list[float]) -> Config:
@@ -161,7 +140,7 @@ class PIBT:
         A = sorted(list(range(N)), key=lambda i: priorities[i], reverse=True)
         for i in A:
             if i_moveto[i] == self.NIL_COORD:
-                self.funcPIBT(i_from, i_moveto, i)
+                self.funcPIBT(i_from, i_moveto, i, i)
 
         # cleanup
         for i in range(N):
@@ -172,13 +151,6 @@ class PIBT:
 
         self.occupied_now.fill(self.NIL)
         self.occupied_nxt.fill(self.NIL)
-
-        if self.new_configs:
-            # Return only the first step of the multi-step sequence
-            # Store the rest for future steps
-            next_config = self.new_configs.pop(0)
-            print(f"[STEP] Executing swap step, {len(self.new_configs)} steps remaining")
-            return next_config
 
         if self.restore:
             restore_complete = all(
@@ -200,7 +172,7 @@ class PIBT:
 
         # main loop, generate sequence of configurations
         configs = [self.starts.copy()]
-        # print("Step 0:", configs[0])
+        print("Step 0:", configs[0])
 
         while len(configs) <= max_timestep:
             # obtain new configuration
@@ -242,7 +214,7 @@ class PIBT:
         if agent_at_v == self.NIL:
             return True  # Vertex is already clear
         
-        # print(f"[CLEAR_VERTEX] Trying to clear vertex {v}, occupied by agent {agent_at_v}")
+        print(f"[CLEAR_VERTEX] Trying to clear vertex {v}, occupied by agent {agent_at_v}")
         
         # Check neighbors of v for empty spots
         for neighbor in get_neighbors(self.grid, v):
@@ -265,10 +237,10 @@ class PIBT:
                 Pre[agent_at_v].append(neighbor)
                 current_config[agent_at_v] = neighbor 
 
-                # print(f"[CLEAR_VERTEX] Moved agent {agent_at_v} from {v} to {neighbor}")
+                print(f"[CLEAR_VERTEX] Moved agent {agent_at_v} from {v} to {neighbor}")
                 return True
         
-        # print(f"[CLEAR_VERTEX] Failed to clear vertex {v}")
+        print(f"[CLEAR_VERTEX] Failed to clear vertex {v}")
         return False
 
     def grid_degree(self, v: Coord) -> int:
@@ -367,14 +339,14 @@ class PIBT:
 
     def clear(self, Pre, r0, s0, v, i_from, i_moveto, path):
         reserved_positions = set()
-        # print(f"..[CLEAR] clearing for {r0} and {s0}")
+        print(f"..[CLEAR] clearing for {r0} and {s0}")
         current_config = i_from.copy()
 
         # Check if the high-degree vertex v is occupied
         agent_at_v = self.get_agent_at_position(current_config, v)
 
         if agent_at_v != self.NIL and agent_at_v not in {r0, s0}:
-            # print(f"[CLEAR] High-degree vertex {v} is occupied by agent {agent_at_v}")
+            print(f"[CLEAR] High-degree vertex {v} is occupied by agent {agent_at_v}")
             
             # First, try to move the agent at v to a safe location
             v_neighbors = get_neighbors(self.grid, v)
@@ -401,7 +373,7 @@ class PIBT:
                         reserved_positions.add(safe_spot)
                         break
                 else:
-                    # print(f"[CLEAR_STACK] Failed to relocate agent {agent_at_v} from vertex {v}")
+                    print(f"[CLEAR_STACK] Failed to relocate agent {agent_at_v} from vertex {v}")
                     return False
 
         # assuming r is the agent at v (path[-1]), and s is the other agent beside v (path[-2])
@@ -412,7 +384,7 @@ class PIBT:
         occupied_positions = set(current_config)
         E = [n for n in neighbors if n not in occupied_positions and n != v0]
 
-        # print(f"[CLEAR] Clearing neighbors of {v}, initially empty: {E}")
+        print(f"[CLEAR] Clearing neighbors of {v}, initially empty: {E}")
 
         if len(E) >= 3:
             return True
@@ -425,7 +397,7 @@ class PIBT:
                 continue
             U = {v, v0}  # avoid pushing into the r's goal vertex and s' goal vertex
             if self.clear_vertex(Pre, n, current_config, U, i_moveto, reserved_positions):
-                # print(f"[CLEAR] Successfully cleared neighbor {n}")
+                print(f"[CLEAR] Successfully cleared neighbor {n}")
 
                 E.append(n)
                 if len(E) >= 3:
@@ -433,10 +405,10 @@ class PIBT:
                 
 
         if len(E) == 0:
-            # print("[CLEAR] No empty neighbors available")
+            print("[CLEAR] No empty neighbors available")
             return False
         
-        # print("[CLEAR] Stage 1 FAILED ...............................")
+        print("[CLEAR] Stage 1 FAILED ...............................")
 
         # -------------------------------
         # Stage 2
@@ -459,10 +431,10 @@ class PIBT:
                     for k in Pi0[i]:
                         if k not in Pre[i]:
                             Pre[i].append(k)
-                # print(f"[CLEAR] Successfully cleared vertex {n} and {ε}")
+                print(f"[CLEAR] Successfully cleared vertex {n} and {ε}")
                 return True
             
-        # print("[CLEAR] Stage 2 FAILED ...............................")
+        print("[CLEAR] Stage 2 FAILED ...............................")
 
         # -------------------------------
         # Stage 3
@@ -478,7 +450,7 @@ class PIBT:
             if n in {v0, ε}:
                 continue
             A0 = i_from.copy()
-            # print("A0:", A0, "r:", r, "s:", s, "v:", v, "ε:", ε, "n:", n)
+            print("A0:", A0, "r:", r, "s:", s, "v:", v, "ε:", ε, "n:", n)
 
             # Move r to ε if free
             if ε in reserved_positions or ε in current_config:
@@ -509,7 +481,7 @@ class PIBT:
                         self.movement_stack[i].append((i_from[i], k, False))
             return True
         
-        # print("[CLEAR] Stage 3 FAILED ...............................")
+        print("[CLEAR] Stage 3 FAILED ...............................")
 
         # -------------------------------
         # Stage 4 - Make Space Behind the Empty Spot
@@ -546,13 +518,12 @@ class PIBT:
         self.movement_stack[t].append((i_from[t], v, False))
         self.movement_stack[t].append((v, ε, False))
 
-        # print(f"[CLEAR] Moved agent {t} from {n} to {v} and then to {ε}")
+        print(f"[CLEAR] Moved agent {t} from {n} to {v} and then to {ε}")
         
         return self.clear_vertex(Pre, ε, A2, {v, v0, n}, i_moveto, reserved_positions)
 
     def get_agent_at_position(self, config: Config, pos: Coord) -> int:
         """Helper function to find which agent is at a given position"""
-        # print("config:", config, "pos:", pos)
         try:
             return config.index(pos)
         except ValueError:
@@ -766,7 +737,7 @@ class PIBT:
         """
         Move agents to high-degree vertex - FIXED for 2-agent case
         """
-        # print(f"[MOVE GROUP] Moving agents {agents} to high-degree vertex {v}")
+        print(f"[MOVE GROUP] Moving agents {agents} to high-degree vertex {v}")
         print(f"[MOVE GROUP] Path: {path}")
         
         if not path or len(agents) < 2:
@@ -790,7 +761,7 @@ class PIBT:
             temp_from[path_agent] = path[0]
             start_idx = 0
         
-        # print(f"[MOVE GROUP] Lead agent {path_agent} starting at path index {start_idx}")
+        print(f"[MOVE GROUP] Lead agent {path_agent} starting at path index {start_idx}")
         
         # FIXED: Ensure the lead agent reaches the target vertex v
         target_idx = path.index(v) if v in path else len(path) - 1
@@ -800,14 +771,14 @@ class PIBT:
         followers = [a for a in agents if a != path_agent]
         
         for step, next_pos in enumerate(remaining_path):
-            # print(f"[MOVE GROUP] Step {step + 1}:")
+            print(f"[MOVE GROUP] Step {step + 1}:")
             
             # Lead agent moves forward
             old_pos = temp_from[path_agent]
             self.movement_stack[path_agent].append((old_pos, next_pos, False))
             Pre[path_agent].append(next_pos)
             temp_from[path_agent] = next_pos
-            # print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
+            print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
             
             # FIXED: Move followers in sequence, ensuring they follow the train
             prev_pos = old_pos  # Position that follower should move to
@@ -818,17 +789,17 @@ class PIBT:
                     self.movement_stack[follower].append((follower_old, prev_pos, False))
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
-                    # print(f"  Follower {follower}: {follower_old} -> {prev_pos}")
+                    print(f"  Follower {follower}: {follower_old} -> {prev_pos}")
                     prev_pos = follower_old  # For next follower
                 else:  # Additional followers take previous follower's old position
                     follower_old = temp_from[follower] 
                     self.movement_stack[follower].append((follower_old, prev_pos, False))
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
-                    # print(f"  Follower {i+1} {follower}: {follower_old} -> {prev_pos}")
+                    print(f"  Follower {i+1} {follower}: {follower_old} -> {prev_pos}")
                     prev_pos = follower_old
             
-            # print(f"  Positions now: {[temp_from[a] for a in agents]}")
+            print(f"  Positions now: {[temp_from[a] for a in agents]}")
         
         # CRITICAL FIX: For 2-agent exchanges, ensure both agents are positioned for exchange
         if len(agents) == 2:
@@ -843,25 +814,25 @@ class PIBT:
                     self.movement_stack[lead_agent].append((old_pos, v, False))
                     Pre[lead_agent].append(v)
                     temp_from[lead_agent] = v
-                    # print(f"  FINAL: Lead agent {lead_agent}: {old_pos} -> {v}")
+                    print(f"  FINAL: Lead agent {lead_agent}: {old_pos} -> {v}")
                 else:
                     # Move other agent to vertex  
                     old_pos = temp_from[other_agent]
                     self.movement_stack[other_agent].append((old_pos, v, False))
                     Pre[other_agent].append(v)
                     temp_from[other_agent] = v
-                    # print(f"  FINAL: Other agent {other_agent}: {old_pos} -> {v}")
+                    print(f"  FINAL: Other agent {other_agent}: {old_pos} -> {v}")
         
         print(f"[MOVE GROUP] Final positions: {[temp_from[a] for a in agents]}")
         
         # Verify at least one agent is on the exchange vertex
         agents_on_vertex = [a for a in agents if temp_from[a] == v]
         if not agents_on_vertex:
-            # print(f"[MOVE GROUP] WARNING: No agent positioned on exchange vertex {v}")
+            print(f"[MOVE GROUP] WARNING: No agent positioned on exchange vertex {v}")
             return False
             
         return True
-
+    
     def is_vertex_safe_during_period(self, vertex, agent, start_step, end_step, normal_simulation):
         """
         Check if vertex is safe (no other agent passes through) during the given period.
@@ -1013,11 +984,10 @@ class PIBT:
         current_state = Pi[-1].copy()
         print(f"[COORDINATED] After setup, {len(Pi)} configurations generated")
 
-        if self.execute_get_out_strategy(Pi, involved_agents, current_state, i_moveto):
-            return True
-
+        #p = len(Pi)
+        #for x in Pi:
+        #    print(x)
         
-        '''
         # Phase 2: Perform all exchanges sequentially at the same vertex
         for swap_idx, (a, b) in enumerate(swap_chain):
             print(f"[COORDINATED] Exchange {swap_idx+1}/{len(swap_chain)}: {a} <-> {b}")
@@ -1050,7 +1020,6 @@ class PIBT:
             # for x in Pi[p-1:]:
             #     print(x)
             # p = len(Pi)
-        '''
         
         # Phase 3: record final exchange position
         self.record_final_exchange_positions(swap_chain, current_state)
@@ -1170,7 +1139,7 @@ class PIBT:
         if len(configs) <= 1:
             return configs
         
-        print(f"[SMOOTH] Removing duplicates from {len(configs)} configurations")
+        # print(f"[SMOOTH] Removing duplicates from {len(configs)} configurations")
         
         # Remove consecutive duplicates
         cleaned_configs = [configs[0]]  # Always keep first config
@@ -1179,207 +1148,9 @@ class PIBT:
             if configs[i] != cleaned_configs[-1]:  # Only add if different from last
                 cleaned_configs.append(configs[i])
             # else:
-            #     print(f"[SMOOTH] Removed duplicate at step {i}: {configs[i]}")
+        #         print(f"[SMOOTH] Removed duplicate at step {i}: {configs[i]}")
         
         print(f"[SMOOTH] Final configuration count: {len(cleaned_configs)}")
         return cleaned_configs
-
-    '''PATTERN DETECTOR IMPLEMENTATION'''
-    def swap_required_and_possible(self, i: int, target_vertex: Coord, i_from: Config) -> Optional[int]:
-        """
-        Pattern detector for swap requirement and possibility.
-        Returns agent ID j if swap with agent i is required and possible, None otherwise.
-        """
-        # Check if there's an agent j at the target vertex
-        j = None
-        for agent_id, pos in enumerate(i_from):
-            if pos == target_vertex:
-                j = agent_id
-                break
-        
-        if j is None or j == i:
-            return None
-            
-        # Only consider swap if current vertex has degree <= 2
-        if self.get_vertex_degree(i_from[i]) > 2:
-            return None
-            
-        # print(f"[SWAP_DETECTOR] Checking swap requirement for agents {i} and {j}")
-        
-        # First emulation: Check if swap is required
-        swap_required = self.emulate_swap_necessity(i, j, i_from)
-        if not swap_required:
-            # print(f"[SWAP_DETECTOR] Swap not required for {i} and {j}")
-            return None
-            
-        # Second emulation: Check if swap is possible  
-        swap_possible = self.emulate_swap_possibility(i, j, i_from)
-        if not swap_possible:
-            # print(f"[SWAP_DETECTOR] Swap not possible for {i} and {j}")
-            return None
-            
-        print(f"[SWAP_DETECTOR] Swap required and possible: {i} <-> {j}")
-        return j
-
-    def emulate_swap_necessity(self, i: int, j: int, i_from: Config) -> bool:
-        """
-        First emulation: Check if swap is necessary.
-        Move i to j's location while moving j away, ignoring other agents.
-        """
-        current_i = i_from[i]
-        current_j = i_from[j]
-        goal_i = self.goals[i]
-        goal_j = self.goals[j]
-        
-        simulation_steps = 0
-        max_steps = 10  # Prevent infinite loops
-        
-        while simulation_steps < max_steps:
-            # Move i toward j's current position
-            current_i = current_j
-            
-            # Move j to another vertex (not i's location)
-            j_neighbors = [n for n in get_neighbors(self.grid, current_j) 
-                          if n != current_i and is_valid_coord(self.grid, n)]
-            
-            if not j_neighbors:
-                break
-                
-            # Move j toward its goal among available neighbors
-            current_j = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
-            
-            # Check stopping conditions
-            # (i) Swap not required: j's location has degree > 2
-            if self.get_vertex_degree(current_j) > 2:
-                return False
-                
-            # (ii) Swap required: j's location has degree 1, or i reaches goal while j's nearest neighbor toward goal is i's goal
-            if self.get_vertex_degree(current_j) == 1:
-                return True
-                
-            if current_i == goal_i:
-                # Check if j's nearest neighbor toward its goal is i's goal
-                j_neighbors = [n for n in get_neighbors(self.grid, current_j) if is_valid_coord(self.grid, n)]
-                if j_neighbors:
-                    nearest_to_goal = min(j_neighbors, key=lambda v: self.dist_tables[j].get(v))
-                    if nearest_to_goal == goal_i:
-                        return True
-                        
-            simulation_steps += 1
-            
-        return False
-
-    def emulate_swap_possibility(self, i: int, j: int, i_from: Config) -> bool:
-        """
-        Second emulation: Check if swap is possible.
-        Move j to i's location while moving i away.
-        """
-        current_i = i_from[i]
-        current_j = i_from[j]
-        
-        simulation_steps = 0
-        max_steps = 10
-        
-        while simulation_steps < max_steps:
-            # Move j toward i's current position
-            current_j = current_i
-            
-            # Move i to another vertex
-            i_neighbors = [n for n in get_neighbors(self.grid, current_i) 
-                          if n != current_j and is_valid_coord(self.grid, n)]
-            
-            if not i_neighbors:
-                break
-                
-            # Move i toward its goal among available neighbors
-            current_i = min(i_neighbors, key=lambda v: self.dist_tables[i].get(v))
-            
-            # Check stopping conditions
-            # (i) Swap possible: i's location has degree > 2
-            if self.get_vertex_degree(current_i) > 2:
-                return True
-                
-            # (ii) Swap impossible: i is on vertex with degree 1
-            if self.get_vertex_degree(current_i) == 1:
-                return False
-                
-            simulation_steps += 1
-            
-        return False
-
-    def get_vertex_degree(self, v: Coord) -> int:
-        """Get the degree of a vertex (number of valid neighbors)"""
-        return len([n for n in get_neighbors(self.grid, v) if is_valid_coord(self.grid, n)])
-
-    '''Corrirdor SWAP???????????'''
-    def execute_get_out_strategy(self, Pi, swap_chain: list, i_from: Config, i_moveto: Config) -> bool:
-        """
-        Execute get-out-of-the-way strategy:
-        1. First agent finds a high-degree vertex and moves there temporarily
-        2. Let the chain of agents flow through
-        3. First agent moves to the final target
-        """
-        if len(swap_chain) < 2:
-            return False
-            
-        first_agent = swap_chain[0]
-        final_target = i_from[swap_chain[-1]]  # Where first agent ultimately wants to go
-        
-        print(f"[GET_OUT] Agent {first_agent} getting out of way, target: {final_target}")
-        
-        # Find a nearby high-degree vertex for temporary parking
-        parking_spot = self.find_waiting_spot(i_from[first_agent], i_from)
-        
-        if parking_spot is None:
-            print("[GET_OUT] No suitable parking spot found")
-            return False
-        
-        # Build the get-out sequence
-        
-        # Step 1: Move first agent to parking spot
-        step1_config = i_from.copy()
-        step1_config[first_agent] = parking_spot
-        Pi.append(step1_config)
-        
-        # Step 2-N: Let chain agents flow through (each takes previous agent's position)
-        current_config = step1_config.copy()
-        for i in range(1, len(swap_chain)):
-            agent = swap_chain[i]
-            prev_agent = swap_chain[i-1]
-            
-            if i == 1:
-                # First follower takes first agent's original position
-                current_config[agent] = i_from[first_agent]
-            else:
-                # Each subsequent agent takes previous agent's original position
-                prev_original_pos = i_from[swap_chain[i-1]]
-                current_config[agent] = prev_original_pos
-            
-            Pi.append(current_config.copy())
-        
-        # Final step: First agent moves to final target
-        current_config[first_agent] = final_target
-        Pi.append(current_config.copy())
-        
-        # Update the global state
-        # self.new_configs = configs[1:]  # Skip initial config
-        
-        # Set immediate moves for this step
-        i_moveto[first_agent] = parking_spot
-        
-        print(f"[GET_OUT] Strategy executed, {len(Pi)} total configurations")
-        return True
-
-    def find_waiting_spot(self, transit_hub: Coord, i_from: Config) -> Optional[Coord]:
-        """
-        Find a neighbor of the transit hub where A1 can wait
-        """
-        for neighbor in get_neighbors(self.grid, transit_hub):
-            if (is_valid_coord(self.grid, neighbor) and 
-                neighbor not in i_from):  # Empty spot
-                return neighbor
-        return None
-
-
 
 
