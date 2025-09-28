@@ -39,26 +39,26 @@ def get_map_dimensions(map_file):
         return None, None
 
 def analyze_failure_reason(stdout_content, max_timestep):
-    """
-    Analyze the failure reason based on output.
-    Returns: 'insufficient_time', 'livelock', 'other', or 'unknown'
-    """
+    # """
+    # Analyze the failure reason based on output.
+    # Returns: 'insufficient_time', 'livelock', 'other', or 'unknown'
+    # """
     # Look for specific patterns in the output
-    if "max timestep reached" in stdout_content.lower():
-        return 'insufficient_time'
-    elif "livelock" in stdout_content.lower():
-        return 'livelock'
-    elif "deadlock" in stdout_content.lower():
-        return 'deadlock'
+    # if "max timestep reached" in stdout_content.lower():
+    #     return 'insufficient_time'
+    # elif "livelock" in stdout_content.lower():
+    #     return 'livelock'
+    # elif "deadlock" in stdout_content.lower():
+    #     return 'deadlock'
     
-    # Check if we can infer from plan length (if available in output)
-    # This would require modifications to your driver code to output more info
-    lines = stdout_content.split('\n')
-    for line in lines:
-        if 'timestep' in line.lower() and 'reached' in line.lower():
-            return 'insufficient_time'
-        elif 'cycle' in line.lower() or 'loop' in line.lower():
-            return 'livelock'
+    # # Check if we can infer from plan length (if available in output)
+    # # This would require modifications to your driver code to output more info
+    # lines = stdout_content.split('\n')
+    # for line in lines:
+    #     if 'timestep' in line.lower() and 'reached' in line.lower():
+    #         return 'insufficient_time'
+    #     elif 'cycle' in line.lower() or 'loop' in line.lower():
+    #         return 'livelock'
     
     return 'unknown'
 
@@ -135,6 +135,7 @@ def main():
     experiments = []
 
     # Add your specific experiment
+    experiments.append(("assets/small.map", "assets/small-random-1.scen", 2))
     experiments.append(("assets/pushmap.map", "assets/pushmap-random-1.scen", 5))
     
     # Find all maps

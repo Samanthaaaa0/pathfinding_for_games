@@ -44,21 +44,3 @@ class DistTable:
                 return d
 
         return self.grid.size
-
-    # sam
-    def get_path(self, target: Coord) -> list[Coord]:
-        """
-        Reconstruct shortest path from target to self.goal.
-        """
-        if self.table[target] >= self.grid.size:
-            return []
-
-        path = []
-        curr = target
-        while curr != self.goal:
-            path.append(curr)
-            curr = self.parent.get(curr)
-            if curr is None:
-                return []  # path broken
-        path.append(self.goal)
-        return path[::-1]

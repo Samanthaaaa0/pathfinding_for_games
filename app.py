@@ -3,6 +3,8 @@
 import argparse
 import os
 
+from tkinter import *
+
 from pibt.pibt_new import (
     PIBT
 )
@@ -53,7 +55,15 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=10000)
+    parser.add_argument("--max-timestep", type=int, default=20)
+
+    parser.add_argument("--grid", dest="show_grid", action="store_true",
+                        help="Show grid on the environment or not")
+    parser.add_argument("--aid", dest="show_ag_idx", action="store_true",
+                        help="Show agent indices or not")
+    parser.add_argument("--tid", dest="show_task_idx", action="store_true",
+                        help="Show task indices or not")
+    parser.add_argument("--plan", type=str, help="Path to the planned path file")
     args = parser.parse_args()
 
     # define problem instance
@@ -66,6 +76,10 @@ if __name__ == "__main__":
 
     # validation: True -> feasible solution
     print(f"solved: {is_valid_mapf_solution(grid, starts, goals, plan)}")
+
+    # json_output = pibt.export_to_json(plan, "output.json")
+
+
 
     # save result
     save_configs_for_visualizer(plan, args.output_file)

@@ -2,10 +2,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 import numpy as np
 import math
-
+from collections import deque
 from .dist_table import DistTable
 from .utils import Config, Configs, Coord, Grid, get_neighbors, is_valid_coord
-from .tojson import *
 
 @dataclass
 class SwapGroup:
@@ -41,205 +40,181 @@ class PIBT:
         self.exchange_positions = {}  # agent_id -> final position after all exchanges
         self.in_swap_operation = False
 
-        # Parallel execution state - just simple arrays
-        self.current_timestep = 0
-        self.agent_states = ["pibt"] * self.num_agents  # "pibt", "swap", "clearing", "waiting"
-        self.agent_plans = {}  # agent_id -> List[Coord]
-        self.plan_steps = [0] * self.num_agents  # current step in plan for each agent
-        self.wait_until = [0] * self.num_agents  # timestep when agent can move again
-        self.active_swaps = []  # List[SwapGroup]
-
         self.max_root_wait = 3
 
-        # - livelock detection -
-        self.push_count = {}  # key = (pushed_agent, pushing_agent), value = count
-        self.livelock_threshold = math.ceil(2*(len(self.grid)*len(self.grid[0])) / self.num_agents)
-        self.livelock_detected = False
-        self.involved_agents = set()
+        '''livelock detection'''
+        self.W = 2 * self.num_agents if self.num_agents < 100 else int(np.sqrt(grid.shape[0] * grid.shape[1]))
+        self.G = self.W // 2
+        self.O = 2  # Oscillation range
 
-        self.push_count_reset_interval = self.livelock_threshold * 2
-        self.current_step_count = 0
+        self.dist_history = [deque(maxlen=self.W) for _ in range(self.num_agents)]
+        self.stall_counter = [0] * self.num_agents
+        self.total_dist_history = deque(maxlen=self.W)
+        self.livelock_detected = False
+
+        self.livelock_mode = False
+        self.agents_on_goal = set()
+        self.original_priorities = None
+        self.livelock_steps = 0
+        self.max_livelock_steps = 10
 
     def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None) -> bool:
-        """
-        Recursive function to implement the PIBT algorithm.
-        root_agent tracks the original high-priority agent that started the chain.
-        """
+        if root_agent is None:
+            root_agent = i
+
+        # Already at goal -> do not move
+        if i_from[i] == self.goals[i]:
+            i_moveto[i] = i_from[i]
+            # print(f"[PIBT] Agent {i} is already at goal {i_from[i]}")
+            return True
+
         if i >= self.num_agents:
             return True
-        
+
         if self.restore:
             return self.handle_restore_agent(i, i_from, i_moveto)
 
-        '''HANDLE LIVELOCK'''
-        # if self.livelock_detected and i in self.involved_agents:
-        #     print(f"[LIVELOCK] Agent {i} involved in livelock, triggering resolution")
-            # return self.handle_livelock_agent(i, i_from, i_moveto)
-
-        # get candidate configurations
         candidate = [i_from[i]] + get_neighbors(self.grid, i_from[i])
-        self.rng.shuffle(candidate)  # tie-breaking, randomize
+        self.rng.shuffle(candidate)
         candidate = sorted(candidate, key=lambda u: self.dist_tables[i].get(u))
 
         potential_swap_candidates = set()
 
         for v in candidate:
+            # print(f"[PIBT] Agent {i} considering move to {v}")
 
+            # Root-agent bounded waiting
             if i == root_agent and v == i_from[i]:
-                # ensure wait count tracking
                 if not hasattr(self, "root_wait_count"):
                     self.root_wait_count = {}
+
                 if i not in self.root_wait_count:
                     self.root_wait_count[i] = 0
 
-                if potential_swap_candidates:
-                    # If already waited enough → don't allow staying in place
-                    if self.root_wait_count[i] >= self.max_root_wait:
-                        break
-                    else:
-                        # Allow bounded waiting
-                        self.root_wait_count[i] += 1
-                # If no swap candidates exist, allow staying as fallback
-                # (root_wait_count still increments so it won’t stay forever)
+                # Only allow staying after all swap candidates or neighbors failed
+                if potential_swap_candidates or any(
+                    self.occupied_nxt[n] == self.NIL and n != i_from[i] for n in get_neighbors(self.grid, i_from[i])
+                ):
+                    # Do not stay yet, try neighbors first
+                    continue
                 else:
-                    if self.root_wait_count[i] >= self.max_root_wait:
-                        break
-                    else:
-                        # Allow bounded waiting
-                        self.root_wait_count[i] += 1
-                print("wait_count:",self.root_wait_count)
+                    # Increment wait count for staying
+                    self.root_wait_count[i] += 1
+                    # print(f"[PIBT] Agent {i} root_wait_count={self.root_wait_count[i]}")
+                    if self.root_wait_count[i] > self.max_root_wait:
+                        # print(f"[PIBT] Agent {i} root_wait exceeded, forcing move")
+                        continue
+
+                # print(f"[PIBT] Agent {i} root_wait_count={self.root_wait_count[i]}")
+
+            if self.occupied_nxt[v] != self.NIL:
+                # print(f"[PIBT] Agent {i} skipped {v} (occupied next)")
+                continue
 
             j = self.occupied_now[v]
-            
-            # Check for vertex conflict - exclude nodes that are already requested by others
-            if self.occupied_nxt[v] != self.NIL:
-
-                # check if higher priority agents ady on goal
-                if (
-                    j != self.NIL
-                    and (i_moveto[j] != self.NIL_COORD
-                    and (i_moveto[j] == self.goals[j]))
-                ):
-                    print("High priority agent is there! added as one of the swap candidates~")
-                    potential_swap_candidates.add((j, v))
-
-                continue
-
-            
-
-            # Avoid swap conflict - EXCLUDE previous position it inherited from
             if j != self.NIL and i_moveto[j] == i_from[i]:
+                # print(f"[PIBT] Agent {i} skipped {v} (swap conflict with agent {j})")
                 continue
 
-            # reserve next location
+            if j != self.NIL and i_from[j] == self.goals[j]:
+                # print(f"[PIBT] Agent {i} cannot push agent {j} at goal {v}")
+                continue
+
+            # Tentatively reserve node
             i_moveto[i] = v
             self.occupied_nxt[v] = i
+            # print(f"[PIBT] Agent {i} tentatively moves to {v}")
 
-            if j != self.NIL and self.occupied_nxt[v] == j:
-                potential_swap_candidates.add((j, v))
+            if j != self.NIL and i_moveto[j] == self.NIL_COORD:
+                resolved = self.funcPIBT(i_from, i_moveto, j, root_agent)
+                if not resolved:
+                    # print(f"[PIBT] Agent {i} failed to resolve agent {j}, saving swap candidate")
+                    if i == root_agent:
+                        potential_swap_candidates.add((j, v))
+                    i_moveto[i] = i_from[i]
+                    self.occupied_nxt[v] = self.NIL
+                    continue
+                else:
+                    if i == root_agent and hasattr(self, "root_wait_count"):
+                        self.root_wait_count[i] = 0
+                    # print(f"[PIBT] Agent {i} successfully resolved agent {j}")
+                    return True
+            else:
+                if i == root_agent and hasattr(self, "root_wait_count"):
+                    self.root_wait_count[i] = 0
+                # print(f"[PIBT] Agent {i} successfully moves to {v}")
+                return True
 
-            # priority inheritance (j != i due to the avoid edge conflict condition)
-            if (
-                j != self.NIL
-                and (i_moveto[j] == self.NIL_COORD)
-                and (not self.funcPIBT(i_from, i_moveto, j, root_agent))  # Pass root_agent down
-            ):
-                
-                # register push counter!!!
-                if self.register_push(j, i):  # j was pushed by i
-                    print(f"[LIVELOCK] Livelock detected during PIBT execution")
-                    # todo:
-
-                # save as potential swap candidate
-                if i == root_agent:
-                    potential_swap_candidates.add((j, v))
-                continue 
-
-            
-            # Success! Found a valid move
-            return True
-        
-        print(f"A{i} -> SWAP CANDIDATES : {potential_swap_candidates}")
+        # Try swap candidates
         if i == root_agent and potential_swap_candidates:
-            # Try swaps in order of preference (closest to goal first)
             sorted_candidates = sorted(
                 potential_swap_candidates,
                 key=lambda x: self.dist_tables[i].get(x[1])
             )
             for j, v in sorted_candidates:
-                print(f"[PIBT] Root agent {i} trying swap with {j} at vertex {v}")
-                if self.try_swap(i, j, i_from, i_moveto):
-                    print(f"[PIBT] Swap success: A{i} <-> A{j}")
+                # print(f"[PIBT] Root agent {i} trying swap with {j} at {v}")
+                success = self.try_swap(i, j, i_from, i_moveto)
+                if success:
+                    if i == root_agent and hasattr(self, "root_wait_count"):
+                        self.root_wait_count[i] = 0
+                    # print(f"[PIBT] Swap success: Agent {i} <-> Agent {j}")
                     return True
-                else: 
-                    print(f"[PIBT] Swap failed: A{i} <-> A{j}")
-        
-        # failed to secure node
-        i_moveto[i] = i_from[i]
-        self.occupied_nxt[i_from[i]] = i
+                else:
+                    # print(f"[PIBT] Swap failed: Agent {i} <-> Agent {j}")
+                    if i_moveto[i] == v:
+                        i_moveto[i] = i_from[i]
+                    if self.occupied_nxt.get(v, None) == i:
+                        self.occupied_nxt[v] = self.NIL
 
+        # Fallback to staying
+        i_moveto[i] = i_from[i]
+        if self.occupied_nxt[i_from[i]] == self.NIL:
+            self.occupied_nxt[i_from[i]] = i
+        # print(f"[PIBT] Agent {i} fallback stay at {i_from[i]}")
         return False
 
+
     def step(self, i_from: Config, priorities: list[float]) -> Config:
-
-        '''LIVELOCK'''
-        self.current_step_count += 1
-        if self.current_step_count % self.push_count_reset_interval == 0:
-            self.reset_push_counts()
-            self.livelock_detected = False
-            self.involved_agents.clear()
-
-        # setup
         N = len(i_from)
-        i_moveto: Config = []
+        i_moveto: Config = [self.NIL_COORD] * N
 
+        # Mark current positions
         for i, v in enumerate(i_from):
-            i_moveto.append(self.NIL_COORD)
             self.occupied_now[v] = i
 
-            # agents on goal just stayed in place
+        # Livelock handling: treat agents on goal as obstacles
+        for i in range(N):
             if i_from[i] == self.goals[i]:
-                i_moveto[i] = v
-                self.occupied_nxt[v] = i
+                self.occupied_now[i_from[i]] = i  # consider immovable for others
+                print(f"[LIVELOCK] Agent {i} is on goal, treated as obstacle")
 
-        # perform PIBT
-        A = sorted(list(range(N)), key=lambda i: priorities[i], reverse=True)
-        # print("A:", A)
+        # Sort by priority
+        A = sorted(range(N), key=lambda i: priorities[i], reverse=True)
+
         for i in A:
             if i_moveto[i] == self.NIL_COORD:
                 self.funcPIBT(i_from, i_moveto, i, i)
 
-        # cleanup
+        # Fallback for unassigned moves
         for i in range(N):
             if i_moveto[i] == self.NIL_COORD:
                 i_moveto[i] = i_from[i]
                 if self.occupied_nxt[i_from[i]] == self.NIL:
                     self.occupied_nxt[i_from[i]] = i
 
+        # Reset occupied arrays
         self.occupied_now.fill(self.NIL)
         self.occupied_nxt.fill(self.NIL)
 
-        if self.restore:
-            restore_complete = all(
-                not self.restore_paths.get(i, []) for i in range(self.num_agents)
-            )
-            if restore_complete:
-                print("[RESTORE] Restore phase complete")
-                self.restore = False
-                self.restore_paths.clear()
-                self.swapping_agents.clear()
-
         return i_moveto
+
+
 
     def run(self, max_timestep: int = 50) -> Configs:
         # identify priorities
         priorities: list[float] = []
         for i in range(self.num_agents):
             priorities.append(self.dist_tables[i].get(self.starts[i]) / self.grid.size)
-
-        print("-"*50)
-        print("Priorities:",priorities)
-        print("-"*50, end="\n")
 
         # main loop, generate sequence of configurations
         configs = [self.starts.copy()]
@@ -267,12 +242,16 @@ class PIBT:
                     flg_fin = False
                     priorities[i] += 1
                 else:
-                    priorities[i] -= np.floor(priorities[i])
-                    print(f"- - - - - - - - - - - - - - - - - - - - A{i} reaches its goal {self.goals[i]}")
+                    # priorities[i] -= np.floor(priorities[i])
+                    if priorities[i] < 1000:
+                        priorities[i] = 1000
             if flg_fin:
                 break  # goal
 
         configs = self.remove_redundant_moves(configs)
+
+        if configs[-1] != self.goals:
+            configs.append(self.goals)
 
         # for i in range(len(configs)):
         #     print(f"Step {i}: {configs[i]}")
@@ -996,6 +975,10 @@ class PIBT:
         """
         print(f"[Swap] {i} <-> {j} starts...\n")
 
+        if self.livelock_mode:
+            if j not in self.agents_on_goal:
+                return False  
+
         # Detect complete swap chain
         print(f"----------------------\n[SIMULATE] Agent-specific lookahead for agent {i}")
         swapped_config = i_from.copy()
@@ -1225,90 +1208,107 @@ class PIBT:
         print(f"[SMOOTH] Final configuration count: {len(cleaned_configs)}")
         return cleaned_configs
     
-    '''
-    DETECT LIVELOCK:
-    - Maintain an n * n matrix pushCount[i][j], where:
-        - i = agent being pushed
-        - j = agent doing the pushing (higher priority in PIBT)
-    - Every time PIBT forces agent i to move because of agent j, increment pushCount[i][j] += 1.
-    - If the count exceeds a threshold θ, declare a livelock.
-    - You can also identify the set of agents involved by looking at the non-zero rows/cols around the cycle.
-    '''
-    def register_push(self, pushed_agent: int, pushing_agent: int) -> bool:
-        """
-        Register that pushing_agent caused pushed_agent to move.
-        Returns True if livelock is detected.
-        """
-        key = (pushed_agent, pushing_agent)
-        self.push_count[key] = self.push_count.get(key, 0) + 1
-        
-        # print(f"[LIVELOCK] Agent {pushing_agent} pushed agent {pushed_agent} "
-            #   f"(count: {self.push_count[key]})")
+    '''livelock detection'''
+    def check_livelock(self, positions): 
+        # get distances from every position 
+        distances = []
+        for i in range(self.num_agents):
+            dist = self.dist_tables[i].get(positions[i])
+            distances.append(dist)
 
-        print("= "*20)
-        print(self.push_count)
-        print("= "*20)
+        total_distance = sum(distances)
         
-        if self.push_count[key] > self.livelock_threshold:
-            return self.detect_livelock()
-        return False
-
-    def detect_livelock(self) -> bool:
-        """
-        Detect livelock by analyzing push patterns.
-        Returns True if livelock is detected and sets involved agents.
-        """
-        self.involved_agents = set()
+        stalled_agents = 0
+        oscillating_agents = 0
         
-        # Find all agents involved in excessive pushing
-        for (pushed, pushing), count in self.push_count.items():
-            if count > self.livelock_threshold:
-                self.involved_agents.add(pushed)
-                self.involved_agents.add(pushing)
+        # Update histories
+        self.total_dist_history.append(total_distance)
         
-        if self.involved_agents:
-            self.livelock_detected = True
-            print(f"[LIVELOCK] Detected livelock involving agents: {self.involved_agents}")
+        # Need minimum history before we can detect anything
+        if len(self.total_dist_history) < self.W // 2:
+            return False
+        
+        for i in range(self.num_agents):
+            # Update distance history
+            self.dist_history[i].append(distances[i])
             
-            # cycles = self.find_push_cycles()
-            # if cycles:
-            #     print(f"[LIVELOCK] Push cycles detected: {cycles}")
+            # Skip if not enough history
+            if len(self.dist_history[i]) < self.G:
+                continue
             
+            # Stall check - has agent made ANY progress in the grace period?
+            recent_distances = list(self.dist_history[i])[-self.G:]
+            best_recent = min(recent_distances)
+            overall_best = min(self.dist_history[i])
+            
+            if best_recent > overall_best:
+                self.stall_counter[i] += 1
+            else:
+                self.stall_counter[i] = 0  # reset if any progress made
+            
+            # Only count as stalled if consistently no progress
+            if self.stall_counter[i] >= self.G // 2:  # half the grace period
+                stalled_agents += 1
+            
+            # Oscillation check - stricter conditions
+            if len(self.dist_history[i]) >= self.W // 2:  # need substantial history
+                recent_half = list(self.dist_history[i])[-self.W//2:]
+                dist_range = max(recent_half) - min(recent_half)
+                made_recent_progress = distances[i] < min(recent_half[:-1])
+                
+                # Only count as oscillating if stuck in small range with no recent progress
+                if dist_range <= self.O and not made_recent_progress and len(recent_half) >= 5:
+                    oscillating_agents += 1
+        
+        # Much stricter livelock conditions
+        total_agents_affected = stalled_agents + oscillating_agents
+        
+        # Condition 1: Most agents affected AND total distance plateau
+        if total_agents_affected >= (self.num_agents * 0.8):  # 80% of agents
+            if len(self.total_dist_history) >= self.W // 2:
+                recent_totals = list(self.total_dist_history)[-self.W//2:]
+                total_improvement = recent_totals[0] - recent_totals[-1]
+                
+                # Very little improvement over long period
+                if total_improvement < self.num_agents * 0.1:  # less than 0.1 per agent
+                    print(f"[LIVELOCK] Condition 1: {total_agents_affected}/{self.num_agents} agents affected, total improvement: {total_improvement}")
+                    return True
+        
+        # Condition 2: Severe oscillation (most agents oscillating for extended period)
+        if oscillating_agents >= (self.num_agents * 0.6) and len(self.total_dist_history) >= self.W:
+            print(f"[LIVELOCK] Condition 2: {oscillating_agents}/{self.num_agents} agents oscillating")
             return True
-        
-        print("= "*20)
-        print(self.involved_agents)
-        print("- "*20)
-        print(self.push_count)
-        print("= "*20)
-        
+            
         return False
 
-    def reset_push_counts(self):
-        """Reset push counts to prevent false positives from old data."""
-        self.push_count.clear()
-        # print("[LIVELOCK] Push counts reset")
-
-
-    # to json
-    def export_to_json(self, configs: Configs, output_file: str = "pibt_output.json") -> Dict:
-        """Export PIBT results to JSON format"""
+    def process_livelock(self, i_from, original_priorities):
+        '''
+        - fix prirotiy (for those agents that are ady on goal - have max p)
+        - only able to swap with higher pirority agent only if the agent ady on goal
+        - end: return to original priorities
+        '''
+        print(f"[LIVELOCK] Detected! Applying resolution...")
         
-        # Create results container
-        results = PIBTResults(
-            configs=configs,
-            start_config=self.starts,
-            goal_config=self.goals, 
-            grid_shape=self.grid.shape,
-            num_agents=self.num_agents,
-            planner_times=[0.1] * len(configs)  # Placeholder timing data
-        )
+        # Reset counters
+        self.stall_counter = [0] * self.num_agents
+        for hist in self.dist_history:
+            hist.clear()
+        self.total_dist_history.clear()
         
-        # Convert to JSON
-        converter = PIBTJSONConverter()
-        json_output = converter.convert_to_json(results, output_file)
+        modified_priorities = original_priorities.copy()
+        max_priority = max(original_priorities) + 1
         
-        print(f"JSON output saved to {output_file}")
-        return json_output
-
-
+        agents_on_goal = []
+        for i in range(self.num_agents):
+            if i_from[i] == self.goals[i]:  # agent is on goal
+                modified_priorities[i] = max_priority
+                agents_on_goal.append(i)
+                print(f"[LIVELOCK] Agent {i} on goal {i_from[i]}, boosted priority to {max_priority}")
+        
+        # Set livelock mode flags
+        self.livelock_mode = True
+        self.agents_on_goal = set(agents_on_goal)
+        self.original_priorities = original_priorities
+        
+        return modified_priorities
+        
