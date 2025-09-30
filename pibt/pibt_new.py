@@ -1,11 +1,9 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 import numpy as np
-import math
 
 from .dist_table import DistTable
 from .utils import Config, Configs, Coord, Grid, get_neighbors, is_valid_coord
-from .tojson import *
 
 @dataclass
 class SwapGroup:
@@ -51,15 +49,6 @@ class PIBT:
 
         self.max_root_wait = 3
 
-        # - livelock detection -
-        self.push_count = {}  # key = (pushed_agent, pushing_agent), value = count
-        self.livelock_threshold = math.ceil(2*(len(self.grid)*len(self.grid[0])) / self.num_agents)
-        self.livelock_detected = False
-        self.involved_agents = set()
-
-        self.push_count_reset_interval = self.livelock_threshold * 2
-        self.current_step_count = 0
-
     def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None) -> bool:
         """
         Recursive function to implement the PIBT algorithm.
@@ -70,11 +59,6 @@ class PIBT:
         
         if self.restore:
             return self.handle_restore_agent(i, i_from, i_moveto)
-
-        '''HANDLE LIVELOCK'''
-        # if self.livelock_detected and i in self.involved_agents:
-        #     print(f"[LIVELOCK] Agent {i} involved in livelock, triggering resolution")
-            # return self.handle_livelock_agent(i, i_from, i_moveto)
 
         # get candidate configurations
         candidate = [i_from[i]] + get_neighbors(self.grid, i_from[i])
@@ -102,30 +86,13 @@ class PIBT:
                 # If no swap candidates exist, allow staying as fallback
                 # (root_wait_count still increments so it won’t stay forever)
                 else:
-                    if self.root_wait_count[i] >= self.max_root_wait:
-                        break
-                    else:
-                        # Allow bounded waiting
-                        self.root_wait_count[i] += 1
-                print("wait_count:",self.root_wait_count)
+                    self.root_wait_count[i] += 1
 
-            j = self.occupied_now[v]
-            
             # Check for vertex conflict - exclude nodes that are already requested by others
             if self.occupied_nxt[v] != self.NIL:
-
-                # check if higher priority agents ady on goal
-                if (
-                    j != self.NIL
-                    and (i_moveto[j] != self.NIL_COORD
-                    and (i_moveto[j] == self.goals[j]))
-                ):
-                    print("High priority agent is there! added as one of the swap candidates~")
-                    potential_swap_candidates.add((j, v))
-
                 continue
 
-            
+            j = self.occupied_now[v]
 
             # Avoid swap conflict - EXCLUDE previous position it inherited from
             if j != self.NIL and i_moveto[j] == i_from[i]:
@@ -135,43 +102,34 @@ class PIBT:
             i_moveto[i] = v
             self.occupied_nxt[v] = i
 
-            if j != self.NIL and self.occupied_nxt[v] == j:
-                potential_swap_candidates.add((j, v))
-
             # priority inheritance (j != i due to the avoid edge conflict condition)
             if (
                 j != self.NIL
                 and (i_moveto[j] == self.NIL_COORD)
                 and (not self.funcPIBT(i_from, i_moveto, j, root_agent))  # Pass root_agent down
             ):
-                
-                # register push counter!!!
-                if self.register_push(j, i):  # j was pushed by i
-                    print(f"[LIVELOCK] Livelock detected during PIBT execution")
-                    # todo:
 
                 # save as potential swap candidate
                 if i == root_agent:
                     potential_swap_candidates.add((j, v))
                 continue 
-
             
             # Success! Found a valid move
             return True
         
-        print(f"A{i} -> SWAP CANDIDATES : {potential_swap_candidates}")
         if i == root_agent and potential_swap_candidates:
             # Try swaps in order of preference (closest to goal first)
             sorted_candidates = sorted(
                 potential_swap_candidates,
                 key=lambda x: self.dist_tables[i].get(x[1])
             )
+
             for j, v in sorted_candidates:
                 print(f"[PIBT] Root agent {i} trying swap with {j} at vertex {v}")
                 if self.try_swap(i, j, i_from, i_moveto):
                     print(f"[PIBT] Swap success: A{i} <-> A{j}")
                     return True
-                else: 
+                else:
                     print(f"[PIBT] Swap failed: A{i} <-> A{j}")
         
         # failed to secure node
@@ -182,13 +140,6 @@ class PIBT:
 
     def step(self, i_from: Config, priorities: list[float]) -> Config:
 
-        '''LIVELOCK'''
-        self.current_step_count += 1
-        if self.current_step_count % self.push_count_reset_interval == 0:
-            self.reset_push_counts()
-            self.livelock_detected = False
-            self.involved_agents.clear()
-
         # setup
         N = len(i_from)
         i_moveto: Config = []
@@ -197,14 +148,8 @@ class PIBT:
             i_moveto.append(self.NIL_COORD)
             self.occupied_now[v] = i
 
-            # agents on goal just stayed in place
-            if i_from[i] == self.goals[i]:
-                i_moveto[i] = v
-                self.occupied_nxt[v] = i
-
         # perform PIBT
         A = sorted(list(range(N)), key=lambda i: priorities[i], reverse=True)
-        # print("A:", A)
         for i in A:
             if i_moveto[i] == self.NIL_COORD:
                 self.funcPIBT(i_from, i_moveto, i, i)
@@ -237,10 +182,6 @@ class PIBT:
         for i in range(self.num_agents):
             priorities.append(self.dist_tables[i].get(self.starts[i]) / self.grid.size)
 
-        print("-"*50)
-        print("Priorities:",priorities)
-        print("-"*50, end="\n")
-
         # main loop, generate sequence of configurations
         configs = [self.starts.copy()]
         print("Step 0:", configs[0])
@@ -257,7 +198,7 @@ class PIBT:
                 configs.append(Q)
 
             Q = configs[-1]
-            print(f"Step {len(configs) - 1}: {Q}")
+            # print(f"Step {len(configs) - 1}: {Q}")
 
             # update priorities & goal check
             # todo: comment it so wont occur "priority problem"
@@ -266,9 +207,8 @@ class PIBT:
                 if Q[i] != self.goals[i]:
                     flg_fin = False
                     priorities[i] += 1
-                else:
-                    priorities[i] -= np.floor(priorities[i])
-                    print(f"- - - - - - - - - - - - - - - - - - - - A{i} reaches its goal {self.goals[i]}")
+                # else:
+                #     priorities[i] -= np.floor(priorities[i])
             if flg_fin:
                 break  # goal
 
@@ -812,7 +752,8 @@ class PIBT:
         print(f"[MOVE GROUP] Moving agents {agents} to high-degree vertex {v}")
         print(f"[MOVE GROUP] Path: {path}")
         
-        if not path or len(agents) < 2:
+        if not path:
+            print("no way bro")
             return False
         
         # Find the agent already on the path
@@ -835,7 +776,7 @@ class PIBT:
         
         print(f"[MOVE GROUP] Lead agent {path_agent} starting at path index {start_idx}")
         
-        # FIXED: Ensure the lead agent reaches the target vertex v
+        # ensure the lead agent reaches the target vertex v
         target_idx = path.index(v) if v in path else len(path) - 1
         remaining_path = path[start_idx + 1:target_idx + 1]  # Include target vertex
         
@@ -852,7 +793,7 @@ class PIBT:
             temp_from[path_agent] = next_pos
             print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
             
-            # FIXED: Move followers in sequence, ensuring they follow the train
+            # Move followers in sequence, ensuring they follow the train
             prev_pos = old_pos  # Position that follower should move to
             
             for i, follower in enumerate(followers):
@@ -873,7 +814,7 @@ class PIBT:
             
             print(f"  Positions now: {[temp_from[a] for a in agents]}")
         
-        # CRITICAL FIX: For 2-agent exchanges, ensure both agents are positioned for exchange
+        # For 2-agent exchanges, ensure both agents are positioned for exchange
         if len(agents) == 2:
             lead_agent, other_agent = agents[0], agents[1]
             
@@ -1002,12 +943,15 @@ class PIBT:
         swapped_config[i], swapped_config[j] = swapped_config[j], swapped_config[i]
         
         _, followup_swaps = self.simulate_agent_only_pibt(i, swapped_config, [], max_steps=3)
+
+        sc = [j]
         
         # Build complete swap chain
         swap_chain = [(i, j)]
         for pair in followup_swaps:
             if pair not in swap_chain and (pair[1], pair[0]) not in swap_chain:
                 swap_chain.append(pair)
+                sc.append(pair[1])
         
         print(f"[SWAP_PLAN] Final swap chain: {swap_chain}\n----------------------------------")
         
@@ -1021,7 +965,11 @@ class PIBT:
             print(f"[SWAP] Trying vertex {v} with path {path}")
             
             # Try to perform all exchanges at this vertex
-            if self.perform_coordinated_exchanges(swap_chain, v, path, i_from, i_moveto):
+            # if self.perform_coordinated_exchanges(swap_chain, v, path, i_from, i_moveto):
+            #     return True
+
+            print("Swapping agents:", sc)
+            if self.corridor_swap(i, sc, v, path, i_from, i_moveto):
                 return True
         
         print("SWAP FAILED - No suitable vertex found")
@@ -1055,10 +1003,6 @@ class PIBT:
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
         print(f"[COORDINATED] After setup, {len(Pi)} configurations generated")
-
-        #p = len(Pi)
-        #for x in Pi:
-        #    print(x)
         
         # Phase 2: Perform all exchanges sequentially at the same vertex
         for swap_idx, (a, b) in enumerate(swap_chain):
@@ -1072,7 +1016,7 @@ class PIBT:
                     involved_agents.add(pair[1])
             involved_agents = list(involved_agents)
 
-            # FIXED: Pass swap_chain to keep all agents connected
+            # Pass swap_chain to keep all agents connected
             if not self.position_agents_for_exchange(Pre, a, b, v, current_state, i_moveto, path, involved_agents):
                 print(f"[COORDINATED] Failed to position agents {a}, {b} for exchange")
                 return False
@@ -1226,89 +1170,104 @@ class PIBT:
         return cleaned_configs
     
     '''
-    DETECT LIVELOCK:
-    - Maintain an n * n matrix pushCount[i][j], where:
-        - i = agent being pushed
-        - j = agent doing the pushing (higher priority in PIBT)
-    - Every time PIBT forces agent i to move because of agent j, increment pushCount[i][j] += 1.
-    - If the count exceeds a threshold θ, declare a livelock.
-    - You can also identify the set of agents involved by looking at the non-zero rows/cols around the cycle.
+    Corridor Swap
+    
+    move to high degree vertex,
+    swapping agent -> high deg -> its neightbour, wait
+    remaining agents -> hgih deg -> to other neigbours
+    swapping agnet -> towards goal
     '''
-    def register_push(self, pushed_agent: int, pushing_agent: int) -> bool:
+    def corridor_swap(self, i, swap_chain: list, v: Coord, path: list, i_from: Config, i_moveto: Config) -> bool:
         """
-        Register that pushing_agent caused pushed_agent to move.
-        Returns True if livelock is detected.
+        Perform all exchanges at the same high-degree vertex with proper coordination.
         """
-        key = (pushed_agent, pushing_agent)
-        self.push_count[key] = self.push_count.get(key, 0) + 1
-        
-        # print(f"[LIVELOCK] Agent {pushing_agent} pushed agent {pushed_agent} "
-            #   f"(count: {self.push_count[key]})")
+        print("----------------------------------------------")
+        print(f"[COORDINATED] Performing {len(swap_chain)} exchanges at vertex {v}")
 
-        print("= "*20)
-        print(self.push_count)
-        print("= "*20)
+        # Initialize stack-based tracking
+        self.in_swap_operation = True
+        self.movement_stack = {i: [] for i in range(self.num_agents)}
         
-        if self.push_count[key] > self.livelock_threshold:
-            return self.detect_livelock()
-        return False
+        # Initialize state tracking
+        Pi = [i_from.copy()]
+        Pre = {k: [] for k in range(self.num_agents)}
+        current_state = i_from.copy()
+        
+        # Initial setup - move all involved agents to the vertex area
+        involved_agents = [i] + swap_chain
+        print(f"[COORDINATED] Involved agents: {involved_agents}")
+        
+        # clear path, move to high-deg v
+        if not self.setup_exchange_area(Pre, involved_agents, v, path, current_state, i_moveto):
+            print("[COORDINATED] Failed to setup exchange area")
+            return False
+        
+        print("[COORDINATED]OK DONE SETTTING UP")
 
-    def detect_livelock(self) -> bool:
-        """
-        Detect livelock by analyzing push patterns.
-        Returns True if livelock is detected and sets involved agents.
-        """
-        self.involved_agents = set()
+        # Generate configurations for setup phase
+        self.generate_config(Pi, Pre, current_state, i_moveto)
+        current_state = Pi[-1].copy()
+        print(f"[COORDINATED] After setup, {len(Pi)} configurations generated")
         
-        # Find all agents involved in excessive pushing
-        for (pushed, pushing), count in self.push_count.items():
-            if count > self.livelock_threshold:
-                self.involved_agents.add(pushed)
-                self.involved_agents.add(pushing)
+        # 来咯来咯
+        # Find empty neighbor for agent i to wait
+        neighbors = get_neighbors(self.grid, v)
+        wait_spot = None
         
-        if self.involved_agents:
-            self.livelock_detected = True
-            print(f"[LIVELOCK] Detected livelock involving agents: {self.involved_agents}")
+        for nbr in neighbors:
+            if nbr not in current_state:
+                wait_spot = nbr
+                break
+        
+        if not wait_spot:
+            self.in_swap_operation = False
+            return False
+        
+        # Move i aside
+        Pre[i].append(wait_spot)
+        print(f"[CORRIDOR SWAP] A{i} moved to {wait_spot}")
+        self.generate_config(Pi, Pre, current_state, i_moveto)
+        current_state = Pi[-1].copy()
+
+        state_b4_moving = current_state.copy()
+
+        print("- "*30)
+        # print("SWAP CHAIN:", swap_chain)
+        
+        # Each swapping agent moves to v (one at a time)
+        for agent in swap_chain:
+
+            print(f"\n[CORRIDOR SWAP] A{agent}'s turn...")
+            if not self.move_agents_to_high_vertex(Pre, [agent], v, current_state, i_moveto, path):
+                print("[CORRIDOR SWAP] MOVE FAILED")
+                return False
             
-            # cycles = self.find_push_cycles()
-            # if cycles:
-            #     print(f"[LIVELOCK] Push cycles detected: {cycles}")
+            prev_pos = Pre[agent][-2] if len(Pre[agent])>1 else state_b4_moving[agent]
+            print(f"[CORRIDOR SWAP] A{agent}'s previous position: {prev_pos}")
+
+            # move to neighbour
+            if not self.clear_vertex(Pre, v, current_state, {wait_spot, prev_pos}, i_moveto, set()):
+                print(f"[CORRIDOR SWAP] Clear vertex failed for A{agent}")
+                return False
             
-            return True
+            self.generate_config(Pi, Pre, current_state, i_moveto)
+            current_state = Pi[-1].copy()
         
-        print("= "*20)
-        print(self.involved_agents)
-        print("- "*20)
-        print(self.push_count)
-        print("= "*20)
+        # print("- "*30)
+        print(f"[CORRIDOR SWAP] STATE NOW: {current_state}")
         
-        return False
-
-    def reset_push_counts(self):
-        """Reset push counts to prevent false positives from old data."""
-        self.push_count.clear()
-        # print("[LIVELOCK] Push counts reset")
-
-
-    # to json
-    def export_to_json(self, configs: Configs, output_file: str = "pibt_output.json") -> Dict:
-        """Export PIBT results to JSON format"""
         
-        # Create results container
-        results = PIBTResults(
-            configs=configs,
-            start_config=self.starts,
-            goal_config=self.goals, 
-            grid_shape=self.grid.shape,
-            num_agents=self.num_agents,
-            planner_times=[0.1] * len(configs)  # Placeholder timing data
-        )
+        # Agent i returns to v
+        Pre[i].append(v)
+        print(f"[CORRIDOR SWAP] A{i} back to {v}~")
+        print("- "*30)
+        self.generate_config(Pi, Pre, current_state, i_moveto)
+        current_state = Pi[-1].copy()
         
-        # Convert to JSON
-        converter = PIBTJSONConverter()
-        json_output = converter.convert_to_json(results, output_file)
+        # self.record_final_exchange_positions([(i, a) for a in swap_chain], current_state)
+        self.new_configs = Pi[1:]
+        self.in_swap_operation = False
         
-        print(f"JSON output saved to {output_file}")
-        return json_output
+        return True
 
 
