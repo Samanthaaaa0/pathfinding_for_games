@@ -55,7 +55,7 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=10000)
+    parser.add_argument("--max-timestep", type=int, default=30)
 
     parser.add_argument("--grid", dest="show_grid", action="store_true",
                         help="Show grid on the environment or not")

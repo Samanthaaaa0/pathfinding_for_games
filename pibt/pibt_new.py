@@ -21,6 +21,8 @@ class PIBT:
         self.num_agents = len(starts)
         self.dist_tables = [DistTable(grid, goal) for goal in goals]
 
+        self.priorities = []
+
         # used for tie-breaking
         self.rng = np.random.default_rng(seed)
 
@@ -182,6 +184,12 @@ class PIBT:
         for i in range(self.num_agents):
             priorities.append(self.dist_tables[i].get(self.starts[i]) / self.grid.size)
 
+        self.priorities = priorities
+
+        print("-- "*20)
+        print("Priorities:", priorities)
+        print("-- "*20)
+
         # main loop, generate sequence of configurations
         configs = [self.starts.copy()]
         print("Step 0:", configs[0])
@@ -189,7 +197,7 @@ class PIBT:
         while len(configs) <= max_timestep:
             # obtain new configuration
             current_config = configs[-1].copy()
-            Q = self.step(current_config, priorities)
+            Q = self.step(current_config, self.priorities)
             
             if self.new_configs != []:
                 configs += self.new_configs.copy()
@@ -214,8 +222,8 @@ class PIBT:
 
         configs = self.remove_redundant_moves(configs)
 
-        # for i in range(len(configs)):
-        #     print(f"Step {i}: {configs[i]}")
+        for i in range(len(configs)):
+            print(f"Step {i}: {configs[i]}")
 
         return configs
     
@@ -226,7 +234,7 @@ class PIBT:
         if agent_at_v == self.NIL:
             return True  # Vertex is already clear
         
-        print(f"[CLEAR_VERTEX] Trying to clear vertex {v}, occupied by agent {agent_at_v}")
+        # print(f"[CLEAR_VERTEX] Trying to clear vertex {v}, occupied by agent {agent_at_v}")
         
         # Check neighbors of v for empty spots
         for neighbor in get_neighbors(self.grid, v):
@@ -252,7 +260,7 @@ class PIBT:
                 print(f"[CLEAR_VERTEX] Moved agent {agent_at_v} from {v} to {neighbor}")
                 return True
         
-        print(f"[CLEAR_VERTEX] Failed to clear vertex {v}")
+        # print(f"[CLEAR_VERTEX] Failed to clear vertex {v}")
         return False
 
     def grid_degree(self, v: Coord) -> int:
@@ -750,7 +758,7 @@ class PIBT:
         Move agents to high-degree vertex - FIXED for 2-agent case
         """
         print(f"[MOVE GROUP] Moving agents {agents} to high-degree vertex {v}")
-        print(f"[MOVE GROUP] Path: {path}")
+        # print(f"[MOVE GROUP] Path: {path}")
         
         if not path:
             print("no way bro")
@@ -767,14 +775,14 @@ class PIBT:
                 break
         
         if path_agent is None:
-            print("[MOVE GROUP] No agent on path, moving first agent to path start")
+            # print("[MOVE GROUP] No agent on path, moving first agent to path start")
             path_agent = agents[0]
             self.movement_stack[path_agent].append((temp_from[path_agent], path[0], False))
             Pre[path_agent].append(path[0])
             temp_from[path_agent] = path[0]
             start_idx = 0
         
-        print(f"[MOVE GROUP] Lead agent {path_agent} starting at path index {start_idx}")
+        # print(f"[MOVE GROUP] Lead agent {path_agent} starting at path index {start_idx}")
         
         # ensure the lead agent reaches the target vertex v
         target_idx = path.index(v) if v in path else len(path) - 1
@@ -784,14 +792,14 @@ class PIBT:
         followers = [a for a in agents if a != path_agent]
         
         for step, next_pos in enumerate(remaining_path):
-            print(f"[MOVE GROUP] Step {step + 1}:")
+            # print(f"[MOVE GROUP] Step {step + 1}:")
             
             # Lead agent moves forward
             old_pos = temp_from[path_agent]
             self.movement_stack[path_agent].append((old_pos, next_pos, False))
             Pre[path_agent].append(next_pos)
             temp_from[path_agent] = next_pos
-            print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
+            # print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
             
             # Move followers in sequence, ensuring they follow the train
             prev_pos = old_pos  # Position that follower should move to
@@ -802,17 +810,17 @@ class PIBT:
                     self.movement_stack[follower].append((follower_old, prev_pos, False))
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
-                    print(f"  Follower {follower}: {follower_old} -> {prev_pos}")
+                    # print(f"  Follower {follower}: {follower_old} -> {prev_pos}")
                     prev_pos = follower_old  # For next follower
                 else:  # Additional followers take previous follower's old position
                     follower_old = temp_from[follower] 
                     self.movement_stack[follower].append((follower_old, prev_pos, False))
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
-                    print(f"  Follower {i+1} {follower}: {follower_old} -> {prev_pos}")
+                    # print(f"  Follower {i+1} {follower}: {follower_old} -> {prev_pos}")
                     prev_pos = follower_old
             
-            print(f"  Positions now: {[temp_from[a] for a in agents]}")
+            # print(f"  Positions now: {[temp_from[a] for a in agents]}")
         
         # For 2-agent exchanges, ensure both agents are positioned for exchange
         if len(agents) == 2:
@@ -827,14 +835,14 @@ class PIBT:
                     self.movement_stack[lead_agent].append((old_pos, v, False))
                     Pre[lead_agent].append(v)
                     temp_from[lead_agent] = v
-                    print(f"  FINAL: Lead agent {lead_agent}: {old_pos} -> {v}")
+                    # print(f"  FINAL: Lead agent {lead_agent}: {old_pos} -> {v}")
                 else:
                     # Move other agent to vertex  
                     old_pos = temp_from[other_agent]
                     self.movement_stack[other_agent].append((old_pos, v, False))
                     Pre[other_agent].append(v)
                     temp_from[other_agent] = v
-                    print(f"  FINAL: Other agent {other_agent}: {old_pos} -> {v}")
+                    # print(f"  FINAL: Other agent {other_agent}: {old_pos} -> {v}")
         
         print(f"[MOVE GROUP] Final positions: {[temp_from[a] for a in agents]}")
         
@@ -899,11 +907,14 @@ class PIBT:
             if blocking_agent != self.NIL and blocking_agent != agent_id:
 
                 # Check priority - don't swap with higher priority agents
-                agent_priority = self.dist_tables[agent_id].get(current_config[agent_id])
-                blocking_priority = self.dist_tables[blocking_agent].get(current_config[blocking_agent])
+                # agent_priority = self.dist_tables[agent_id].get(current_config[agent_id])
+                # blocking_priority = self.dist_tables[blocking_agent].get(current_config[blocking_agent])
+
+                agent_priority = self.priorities[agent_id]
+                blocking_priority = self.priorities[blocking_agent]
                 
-                if blocking_priority < agent_priority:  # Higher priority (lower distance)
-                    print(f"[SIMULATE_AGENT] Agent {blocking_agent} has higher priority, no swap")
+                if blocking_priority > agent_priority and desired_pos != self.goals[blocking_agent]:  # Higher priority (lower distance)
+                    print(f"[SIMULATE_AGENT] Agent {blocking_agent} has higher priority and not on its goal {self.goals[blocking_agent]}, no swap")
                     break
 
                 detected_swaps.append((agent_id, blocking_agent))
@@ -953,7 +964,7 @@ class PIBT:
                 swap_chain.append(pair)
                 sc.append(pair[1])
         
-        print(f"[SWAP_PLAN] Final swap chain: {swap_chain}\n----------------------------------")
+        # print(f"[SWAP_PLAN] Final swap chain: {swap_chain}\n----------------------------------")
         
         # Find suitable high-degree vertex
         candidates = self.find_high_degree_vertices(i_from[i], i_from)
@@ -968,7 +979,11 @@ class PIBT:
             # if self.perform_coordinated_exchanges(swap_chain, v, path, i_from, i_moveto):
             #     return True
 
+            print()
+            print("*-"*20)
             print("Swapping agents:", sc)
+            print("*-"*20)
+            print()
             if self.corridor_swap(i, sc, v, path, i_from, i_moveto):
                 return True
         
@@ -1182,7 +1197,7 @@ class PIBT:
         Perform all exchanges at the same high-degree vertex with proper coordination.
         """
         print("----------------------------------------------")
-        print(f"[COORDINATED] Performing {len(swap_chain)} exchanges at vertex {v}")
+        # print(f"[COORDINATED] Performing {len(swap_chain)} exchanges at vertex {v}")
 
         # Initialize stack-based tracking
         self.in_swap_operation = True
@@ -1196,48 +1211,52 @@ class PIBT:
         # Initial setup - move all involved agents to the vertex area
         involved_agents = [i] + swap_chain
         print(f"[COORDINATED] Involved agents: {involved_agents}")
+
+        original_positions = {agent: current_state[agent] for agent in swap_chain}
+        cleared_positions = {}
         
         # clear path, move to high-deg v
         if not self.setup_exchange_area(Pre, involved_agents, v, path, current_state, i_moveto):
             print("[COORDINATED] Failed to setup exchange area")
             return False
         
-        print("[COORDINATED]OK DONE SETTTING UP")
+        # print("[COORDINATED]OK DONE SETTTING UP")
 
         # Generate configurations for setup phase
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
-        print(f"[COORDINATED] After setup, {len(Pi)} configurations generated")
+        # print(f"[COORDINATED] After setup, {len(Pi)} configurations generated")
         
         # 来咯来咯
         # Find empty neighbor for agent i to wait
-        neighbors = get_neighbors(self.grid, v)
         wait_spot = None
-        
-        for nbr in neighbors:
+        for nbr in get_neighbors(self.grid, v):
             if nbr not in current_state:
                 wait_spot = nbr
                 break
         
         if not wait_spot:
-            self.in_swap_operation = False
+            # self.in_swap_operation = False
             return False
         
         # Move i aside
         Pre[i].append(wait_spot)
+        # self.generate_config(Pi, Pre, current_state, i_moveto)
+        # current_state = Pi[-1].copy()
         print(f"[CORRIDOR SWAP] A{i} moved to {wait_spot}")
-        self.generate_config(Pi, Pre, current_state, i_moveto)
-        current_state = Pi[-1].copy()
+
+        # self.update_curr_state(Pre, current_state)
 
         state_b4_moving = current_state.copy()
 
-        print("- "*30)
+        print()
+        print("- "*50)
         # print("SWAP CHAIN:", swap_chain)
         
         # Each swapping agent moves to v (one at a time)
         for agent in swap_chain:
+            print(f"\n\t[CORRIDOR SWAP] A{agent}'s turn...\n")
 
-            print(f"\n[CORRIDOR SWAP] A{agent}'s turn...")
             if not self.move_agents_to_high_vertex(Pre, [agent], v, current_state, i_moveto, path):
                 print("[CORRIDOR SWAP] MOVE FAILED")
                 return False
@@ -1245,29 +1264,105 @@ class PIBT:
             prev_pos = Pre[agent][-2] if len(Pre[agent])>1 else state_b4_moving[agent]
             print(f"[CORRIDOR SWAP] A{agent}'s previous position: {prev_pos}")
 
+            self.update_curr_state(Pre, current_state)
+
             # move to neighbour
             if not self.clear_vertex(Pre, v, current_state, {wait_spot, prev_pos}, i_moveto, set()):
-                print(f"[CORRIDOR SWAP] Clear vertex failed for A{agent}")
-                return False
-            
-            self.generate_config(Pi, Pre, current_state, i_moveto)
-            current_state = Pi[-1].copy()
-        
-        # print("- "*30)
-        print(f"[CORRIDOR SWAP] STATE NOW: {current_state}")
-        
-        
-        # Agent i returns to v
-        Pre[i].append(v)
-        print(f"[CORRIDOR SWAP] A{i} back to {v}~")
-        print("- "*30)
+
+                self.update_curr_state(Pre, current_state)
+
+                neighbors = [n for n in get_neighbors(self.grid, v) if n not in {wait_spot, prev_pos}]
+                cleared = False
+
+                for neighbor in neighbors:
+                    # First, try to clear the neighbor's neighbors (cascade clearing)
+                    neighbor_neighbors = get_neighbors(self.grid, neighbor)
+                    for nn in neighbor_neighbors:
+                        if nn != v:  # Don't push back to v
+                            self.clear_vertex(Pre, nn, current_state, {v, neighbor}, i_moveto, set())
+                            self.update_curr_state(Pre, current_state)
+
+                    # clear the neighbor itself
+                    if self.clear_vertex(Pre, neighbor, current_state, {v}, i_moveto, set()):
+                        self.update_curr_state(Pre, current_state)
+
+                        if self.clear_vertex(Pre, v, current_state, {wait_spot, prev_pos}, i_moveto, set()):
+                            cleared = True
+                            break
+                
+                if not cleared:
+                    print(f"[CORRIDOR SWAP] Failed to clear vertex for A{agent}")
+                    self.in_swap_operation = False
+                    return False
+                
+            self.update_curr_state(Pre, current_state)
+            cleared_positions[agent] = current_state[agent]
+
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
         
-        # self.record_final_exchange_positions([(i, a) for a in swap_chain], current_state)
+        # print("- "*30)
+        # print(f"[CORRIDOR SWAP] STATE NOW: {current_state}")
+        print()
+        print("*-"*30)
+        print(f"{cleared_positions}")
+        print("*-"*30)
+
+
+        # Agent i returns to v
+        Pre[i].append(v)
+        print()
+        print(f"[CORRIDOR SWAP] A{i} back to {v} ~")
+        print("- "*50)
+
+        # self.generate_config(Pi, Pre, current_state, i_moveto)
+        # current_state = Pi[-1].copy()
+        
+        # === RESTORATION: Move agents back step by step ===
+        # print("\n[RESTORE] Starting step-by-step restoration")
+        # print(f"[RESTORE] Cleared positions\t: {cleared_positions}")
+        # print(f"[RESTORE] Original positions\t: {original_positions}")
+        
+        # # Build reverse paths from cleared position back to original position
+        # for agent in reversed(swap_chain):
+        #     current_pos = cleared_positions[agent]
+        #     target_pos = original_positions[agent]
+            
+        #     if current_pos == target_pos:
+        #         continue
+            
+        #     # Find path back (simple: move through v if needed)
+        #     if current_pos in get_neighbors(self.grid, v) and target_pos in path:
+        #         # Agent at neighbor of v, needs to go back through v to path
+        #         Pre[agent].append(v)
+                
+        #         # Then follow path back to original position
+        #         # Find index in path
+        #         if target_pos in path:
+        #             target_idx = path.index(target_pos)
+        #             current_idx = path.index(v)
+                    
+        #             # Move step by step back along path
+        #             if target_idx < current_idx:
+        #                 for step in range(current_idx - 1, target_idx - 1, -1):
+        #                     Pre[agent].append(path[step])
+        #                     print(f"[RESTORE] A{agent} step back to {path[step]}")
+        
+        # # Generate restoration configs
+        # self.generate_config(Pi, Pre, current_state, i_moveto)
+        # current_state = Pi[-1].copy()
+        
+        # print(f"[RESTORE] Final positions: {[current_state[a] for a in swap_chain]}")
+        
         self.new_configs = Pi[1:]
         self.in_swap_operation = False
         
         return True
+    
+    def update_curr_state(self, Pre, current_state):
+        for a in range(self.num_agents):
+            if a in Pre.keys() and Pre[a]:
+                # print("PRE[a]:", Pre[a])
+                current_state[a] = Pre[a][-1]
 
 

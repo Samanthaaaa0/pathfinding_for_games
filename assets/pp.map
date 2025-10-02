@@ -122,3 +122,29 @@ version 1
 7	pushmap.map	5	6	3	1	1	1	30.89949493
 4	pushmap.map	5	6	4	1	2	1	20.89949493
 2	pushmap.map	5	6	1	0	1	0	70.22222211
+
+
+------
+(gn p5 first exmaple)
+
+type octile
+height 5
+width 8
+map
+..@@@...
+........
+..@@@@..
+..@@@@@@
+@@@@@@@@
+
+version 1
+2	corswap.map	8	5	3	1	7	0	200.65685425
+1	corswap.map	8	5	1	0	1	0	30.89949493
+3	corswap.map	8	5	5	0	5	0	3.65685425
+4	corswap.map	8	5	6	0	6	0	100.89949493
+5	corswap.map	8	5	7	0	4	1	1.65685425df
+3	corswap.map	8	5	5	1	5	1	3.65685425
+4	corswap.map	8	5	6	1	6	1	100.89949493
+3	corswap.map	8	5	7	1	7	1	3.65685425
+4	corswap.map	8	5	6	2	6	2	100.89949493
+3	corswap.map	8	5	7	2	7	2	3.65685425
