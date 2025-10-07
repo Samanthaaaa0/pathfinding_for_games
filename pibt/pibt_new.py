@@ -174,12 +174,6 @@ class PIBT:
             i_moveto.append(self.NIL_COORD)
             self.occupied_now[v] = i
 
-            # VERY THE FORCE THEM (ke yi de ma)
-            # agents on goal just stayed in place
-            # if i_from[i] == self.goals[i]:
-            #     i_moveto[i] = v
-            #     self.occupied_nxt[v] = i
-
         # perform PIBT
         A = sorted(list(range(N)), key=lambda i: priorities[i], reverse=True)
         for i in A:
@@ -704,96 +698,6 @@ class PIBT:
                     return False
         
         return True
-    
-    # def checkyckecky(self, )
-
-    def optimize_restore_paths(self, original_config, normal_paths: list[Config]) -> None:
-        """
-        Simulate normal PIBT from original positions and cancel redundant moves.
-        """
-        print("[OPTIMIZE] Simulating normal PIBT to optimize restore paths")
-        
-        # Create a temporary PIBT instance to simulate normal movement
-        current_pos = original_config.copy()
-        max_steps = max(len(path) for path in self.restore_paths.values()) if self.restore_paths else 0
-
-        # normal_paths = self.pibt_simulation.copy()  # Store the sequence of normal PIBT configurations
-
-        for agent in range(self.num_agents):
-            if agent not in self.restore_paths or not self.restore_paths[agent]:
-                continue
-
-            # If agent has a restore path, simulate normal PIBT to see if it conflicts
-            restore_target = self.restore_paths[agent][0]  # Next restore position
-            normal_target = normal_paths[0][agent]  # Where normal PIBT wants to go
-        
-            # If normal PIBT wants to go to the same place as restore, cancel both
-            if normal_target == restore_target:
-                # todo: remove from restore path (the whole path at once after checking all)
-                print(f"[OPTIMIZE] Canceled redundant move for agent {agent} to {restore_target}")
-            # If they want to go to different places, keep restore path
-            elif normal_target != current_pos[agent]:
-                # Normal PIBT wants to move somewhere else, prioritize restore
-                pass       
-        
-            # Update current positions based on remaining restore paths or normal movement
-            for agent in range(self.num_agents):
-                if agent in self.restore_paths and self.restore_paths[agent]:
-                    current_pos[agent] = self.restore_paths[agent][0]
-                    self.restore_paths[agent].pop(0)
-                else:
-                    current_pos[agent] = normal_paths[agent]
-
-    def simulate_normal_pibt_sequence(
-        self,
-        start_config: Config,
-        max_steps: int = 10
-    ) -> tuple[list[Config], list[tuple[int, int]]]:
-        """
-        Simulate normal PIBT for multiple steps without swap operations.
-        If assume_swapped=(i,j), the start_config is modified as if i and j already swapped.
-        Returns (sequence of configurations, detected swap chain).
-        """
-        print(f"[SIMULATE] Simulating normal PIBT for {max_steps} steps...")
-
-        # Disable swaps temporarily
-        original_try_swap = self.try_swap
-        self.try_swap = lambda *args: False  
-
-        # Save & reset restore state
-        old_restore = self.restore
-        old_restore_paths = self.restore_paths.copy()
-        old_swapping_agents = self.swapping_agents.copy()
-        self.restore = False
-        self.restore_paths = {}
-        self.swapping_agents = set()
-
-        simulation_sequence = [start_config.copy()]
-        current_config = start_config.copy()
-
-        for step in range(max_steps):
-            priorities = []
-            for agent_id in range(self.num_agents):
-                dist = self.dist_tables[agent_id].get(current_config[agent_id])
-                priorities.append(dist / self.grid.size + step)
-
-            next_config = self.step(current_config, priorities)
-            simulation_sequence.append(next_config.copy())
-            current_config = next_config
-
-            if all(current_config[aid] == self.goals[aid] for aid in range(self.num_agents)):
-                print(f"[SIMULATE] All agents reached goals at step {step+1}")
-                break
-
-        # Restore methods & state
-        self.try_swap = original_try_swap
-        self.restore = old_restore
-        self.restore_paths = old_restore_paths
-        self.swapping_agents = old_swapping_agents
-
-        print(f"[SIMULATE] Generated {len(simulation_sequence)} configurations")
-
-        return simulation_sequence
 
     def move_agents_to_high_vertex(self, Pre: dict, agents: list[int], v: Coord, temp_from: Config, i_moveto: Config, path: list):
         """
@@ -902,28 +806,6 @@ class PIBT:
             
         return True
     
-    def is_vertex_safe_during_period(self, vertex, agent, start_step, end_step, normal_simulation):
-        """
-        Check if vertex is safe (no other agent passes through) during the given period.
-        """
-        for step in range(start_step, min(end_step, len(normal_simulation))):
-            for other_agent in range(self.num_agents):
-                if other_agent == agent:
-                    continue
-                    
-                # Check if other agent passes through this vertex
-                if (step < len(normal_simulation) and 
-                    normal_simulation[step][other_agent] == vertex):
-                    return False
-                    
-                # Check restore paths of other agents
-                if (other_agent in self.restore_paths and 
-                    step < len(self.restore_paths[other_agent]) and
-                    self.restore_paths[other_agent][step] == vertex):
-                    return False
-                    
-        return True
-
     def simulate_agent_only_pibt(self, agent_id: int, start_config: Config, detected_swaps: List, max_steps: int = 5) -> tuple[list[Config], list[tuple[int, int]]]:
         """
         Simulate PIBT for a specific agent only to detect additional swaps needed.
@@ -1155,78 +1037,6 @@ class PIBT:
     
         return True
 
-    # to delete
-    def setup_stack_based_restore_mode(self, Pi: list, involved_agents: list, original_positions: Config, v: Coord):
-        """
-        Simple stack-based restore - Pi is list of configs, each config is list of positions.
-        """
-        print(f"[STACK_RESTORE] Setting up restore for {len(involved_agents)} swaps")
-        print(f"[STACK_RESTORE] Pi has {len(Pi)} configurations")
-        
-        self.restore = True  
-        # self.restore_paths = {}
-
-        # for idx, agent in enumerate(involved_agents):
-        #     if idx == i:
-        #         self.restore_paths[idx] = [p[-1] for p in Pi]
-        #     else:
-        #         self.restore_paths[idx] = [p[idx-1] for p in Pi]
-
-        print("")
-        
-        # Get original and final positions
-        initial_config = original_positions  # Where they started
-
-        
-    
-        # Calculate target positions (rotate)
-        target_positions = {}
-        for idx, agent in enumerate(involved_agents):
-            if idx == 0:
-                target_positions[agent] = initial_config[involved_agents[-1]]
-            else:
-                target_positions[agent] = initial_config[involved_agents[idx - 1]]
-        
-        print(f"[STACK_RESTORE] Target positions after swap: {target_positions}")
-        
-        # Build restore paths from stack - include ALL positions (even waits)
-        for agent in involved_agents:
-            if agent not in self.movement_stack or not self.movement_stack[agent]:
-                continue
-            
-            restore_path = []
-            
-            # Phase 1: Line up at v first (move back through cleared positions to v)
-            # Reverse the movement stack to go back
-            reversed_moves = list(reversed(self.movement_stack[agent]))
-
-            restore_path = list(reversed(target_positions[agent]))
-
-            
-            # for old_pos, new_pos, is_exchange_move in reversed_moves:
-            #     if not is_exchange_move:
-            #         restore_path.append(old_pos)
-
-                
-            
-            print(f"- - - - - - - - - - - - - -- - - - - - - - - - - - - - - -- - - - - - -- -  - - -  A{agent} PHASE 1: {restore_path}")
-            
-            # Phase 2: From v, follow path to rotated target position
-            # Find the path from v to target
-            target = target_positions[agent]
-            
-            # If target is not v, add it
-            if restore_path and restore_path[-1] != target:
-                restore_path.append(target)
-            elif not restore_path:
-                # Agent needs to go directly to target
-                restore_path = [v, target] if Pi[-1][agent] != v else [target]
-            
-            if restore_path:
-                self.restore_paths[agent] = restore_path
-                print(f"[STACK_RESTORE] Agent {agent} path: {restore_path}")
-        
-        print(f"[STACK_RESTORE] Restore setup complete")
 
     def record_final_exchange_positions(self, swap_chain: list, final_state: Config):
         """
@@ -1399,10 +1209,10 @@ class PIBT:
                 rotated_stack[agent] = self.movement_stack[involved_agents[idx-1]]
                 print(f"ROTATE: A{agent} takes A{involved_agents[idx-1]}'s stack")
 
-        print()
-        for o in rotated_stack:
-            print(f"A{o}: {rotated_stack[o]}")
-        print()
+        # print()
+        # for o in rotated_stack:
+        #     print(f"A{o}: {rotated_stack[o]}")
+        # print()
 
         max_len = max(len(rotated_stack[a]) for a in involved_agents if a in rotated_stack)
 
@@ -1423,8 +1233,6 @@ class PIBT:
             current_state = Pi[-1].copy()
 
         print(f"[RESTORE] Final positions: {current_state}")
-
-        # self.restore_paths = Pi_restore
                 
         self.new_configs = Pi[1:]
         self.in_swap_operation = False
