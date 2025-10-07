@@ -246,8 +246,8 @@ class PIBT:
 
         configs = self.remove_redundant_moves(configs)
 
-        # for i in range(len(configs)):
-        #     print(f"Step {i}: {configs[i]}")
+        for i in range(len(configs)):
+            print(f"Step {i}: {configs[i]}")
 
         if configs[-1] != self.goals:
             configs.append(self.goals)
@@ -1212,9 +1212,31 @@ class PIBT:
             print(f"A{agent}: {rotated_stack[agent]}")
         print()
 
+        print("\n[RESTORE FIX] Checking for position mismatches...")
+        for agent in involved_agents:
+            if rotated_stack[agent]:
+                # Expected starting position (where restoration should begin from)
+                expected_start = rotated_stack[agent][-1][1]  # Last move's to_pos
+                
+                if current_state[agent] != expected_start:
+                    print(f"[RESTORE FIX] A{agent}: Mismatch - at {current_state[agent]}, need {expected_start}")
+                    
+                    # Find path to high-degree vertex v
+                    path_to_v = self.find_path_to_vertex(current_state[agent], v)
+                    
+                    if path_to_v and len(path_to_v) > 1:
+                        # Convert path to move tuples and prepend to rotated_stack
+                        connecting_moves = []
+                        for i in range(len(path_to_v) - 1):
+                            connecting_moves.append((path_to_v[i], path_to_v[i+1], False))
+                        
+                        # Prepend connecting path to restoration path
+                        rotated_stack[agent] = rotated_stack[agent] + connecting_moves
+                        print(f"[RESTORE FIX] A{agent}: Added connecting path {path_to_v}")
+
         max_len = max(len(rotated_stack[a]) for a in involved_agents if rotated_stack[a])
 
-        # Iterate through timesteps in REVERSE (from last move to first)
+        # Iterate through timesteps in REVERSE
         for t in range(max_len - 1, -1, -1):
             Pre = {k: [] for k in range(self.num_agents)}
             
@@ -1222,21 +1244,43 @@ class PIBT:
                 if t < len(rotated_stack[agent]):
                     move = rotated_stack[agent][t]
                     from_pos, to_pos, _ = move
-                    if from_pos != to_pos:  # Skip wait moves
+                    
+                    if current_state[agent] == to_pos and from_pos != to_pos:
                         Pre[agent].append(from_pos)
                         print(f"[RESTORE t={t}] A{agent}: {to_pos} -> {from_pos}")
             
-            # All agents move together at this timestep
+            # TODO: make it parallel
             self.generate_config(Pi, Pre, current_state, i_moveto)
             current_state = Pi[-1].copy()
 
         print(f"[RESTORE] Final positions: {current_state}")
-                
+                    
         self.new_configs = Pi[1:]
         self.in_swap_operation = False
-        
+            
         return True
-    
+
+    def find_path_to_vertex(self, start: Coord, target: Coord) -> list:
+        """Simple BFS to find path from start to target."""
+        if start == target:
+            return [start]
+        
+        queue = [(start, [start])]
+        visited = {start}
+        
+        while queue:
+            pos, path = queue.pop(0)
+            
+            for nbr in get_neighbors(self.grid, pos):
+                if nbr == target:
+                    return path + [target]
+                
+                if nbr not in visited:
+                    visited.add(nbr)
+                    queue.append((nbr, path + [nbr]))
+        
+        return []  # No path found
+        
     def trim_redundant_restoration(self, rotated_stack: list, involved_agents: list, current_state: Config) -> list:
         """
         Simulate PIBT after restoration and remove redundant moves by comparing path lists.
@@ -1303,7 +1347,7 @@ class PIBT:
             overlap = 0
             for i in range(1, min(len(restore_path), len(pibt_reversed)) + 1):
                 if restore_path[-i:] == pibt_reversed[:i]:
-                    overlap = i
+                    overlap = i-1
             
             if overlap > 0:
                 # Trim the overlapping moves from rotated_stack
