@@ -1049,6 +1049,7 @@ class PIBT:
         
         print(f"[RECORD_FINAL] Final exchange positions: {self.exchange_positions}")
 
+
     '''post-processing -- smooth'''
     # remove consecutive duplicate configurations
     def remove_redundant_moves(self, configs: list) -> list:
@@ -1078,7 +1079,7 @@ class PIBT:
     move to high degree vertex,
     swapping agent -> high deg -> its neightbour, wait
     remaining agents -> hgih deg -> to other neigbours
-    swapping agnet -> towards goal
+    swapping agent -> towards goal
     '''
     def corridor_swap(self, i, swap_chain: list, v: Coord, path: list, i_from: Config, i_moveto: Config) -> bool:
         """
@@ -1095,9 +1096,6 @@ class PIBT:
         
         involved_agents = [i] + swap_chain
         print(f"[CORRIDOR] Involved agents: {involved_agents}")
-        
-        # RECORD INITIAL CONFIGURATION
-        initial_config = current_state.copy()
         
         # Setup
         if not self.setup_exchange_area(Pre, involved_agents, v, path, current_state, i_moveto):
@@ -1191,37 +1189,37 @@ class PIBT:
         Pre[i].append(v)
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
-
-
-        Pre_restore = {k: [] for k in range(self.num_agents)}
         
         print(f"\n[CORRIDOR] A{i} back to {v}")
         
         print("\n[RESTORE] Moving to final swapped positions...")
 
-        rotated_stack = self.movement_stack.copy()
+        # Use list instead of dict
+        rotated_stack = [[] for _ in range(self.num_agents)]
 
         for idx, agent in enumerate(involved_agents):
-            if idx == i:
-                rotated_stack[agent] = self.movement_stack[involved_agents[-1]]
+            if idx == 0:  # agent i
+                rotated_stack[agent] = self.movement_stack[involved_agents[-1]].copy()
                 print(f"ROTATE: A{agent} takes A{involved_agents[-1]}'s stack")
             else:
-                rotated_stack[agent] = self.movement_stack[involved_agents[idx-1]]
+                rotated_stack[agent] = self.movement_stack[involved_agents[idx-1]].copy()
                 print(f"ROTATE: A{agent} takes A{involved_agents[idx-1]}'s stack")
 
-        # print()
-        # for o in rotated_stack:
-        #     print(f"A{o}: {rotated_stack[o]}")
-        # print()
+        rotated_stack = self.trim_redundant_restoration(rotated_stack, involved_agents, current_state)
 
-        max_len = max(len(rotated_stack[a]) for a in involved_agents if a in rotated_stack)
+        print()
+        for agent in involved_agents:
+            print(f"A{agent}: {rotated_stack[agent]}")
+        print()
+
+        max_len = max(len(rotated_stack[a]) for a in involved_agents if rotated_stack[a])
 
         # Iterate through timesteps in REVERSE (from last move to first)
         for t in range(max_len - 1, -1, -1):
             Pre = {k: [] for k in range(self.num_agents)}
             
             for agent in involved_agents:
-                if agent in rotated_stack and t < len(rotated_stack[agent]):
+                if t < len(rotated_stack[agent]):
                     move = rotated_stack[agent][t]
                     from_pos, to_pos, _ = move
                     if from_pos != to_pos:  # Skip wait moves
@@ -1239,6 +1237,83 @@ class PIBT:
         
         return True
     
+    def trim_redundant_restoration(self, rotated_stack: list, involved_agents: list, current_state: Config) -> list:
+        """
+        Simulate PIBT after restoration and remove redundant moves by comparing path lists.
+        """
+        print("\n[TRIM] Analyzing restoration paths for redundancy...")
+        
+        # Calculate where agents will be AFTER full restoration
+        post_restore_config = current_state.copy()
+        for agent in involved_agents:
+            if rotated_stack[agent]:
+                # Get final position after all restoration moves
+                post_restore_config[agent] = rotated_stack[agent][0][0]  # First move's from_pos
+        
+        print(f"[TRIM] Post-restoration positions: {[post_restore_config[a] for a in involved_agents]}")
+        
+        # Simulate PIBT for a few steps
+        orig_swap = self.in_swap_operation
+        self.in_swap_operation = True
+        self.new_configs = []  # Clear to prevent interference
+        
+        sim_configs = [post_restore_config.copy()]
+        current = post_restore_config.copy()
+        sim_priorities = self.priorities.copy()
+        
+        for _ in range(8):  # Simulate more steps
+            next_config = self.step(current, sim_priorities)
+            
+            # Only add if different from last config
+            if next_config != sim_configs[-1]:
+                sim_configs.append(next_config)
+                current = next_config
+            
+            for i in range(self.num_agents):
+                if current[i] != self.goals[i]:
+                    sim_priorities[i] += 1
+        
+        self.in_swap_operation = orig_swap
+        self.new_configs = []  # Clear again
+        
+        # Convert to path lists and trim
+        trimmed_stack = [[] for _ in range(self.num_agents)]
+        
+        for agent in involved_agents:
+            if not rotated_stack[agent]:
+                continue
+            
+            # Convert restore moves to path list (remove consecutive duplicates)
+            restore_path = [current_state[agent]]
+            for from_pos, to_pos, _ in rotated_stack[agent][::-1]:  # Reverse to get forward order
+                if to_pos != restore_path[-1]:  # Skip duplicates
+                    restore_path.append(to_pos)
+            restore_path.append(rotated_stack[agent][0][0])
+            
+            # Convert PIBT sim to path list (already filtered above)
+            pibt_path = [config[agent] for config in sim_configs]
+            
+            print(f"\n[TRIM] A{agent} restore path: {restore_path}")
+            print(f"[TRIM] A{agent} PIBT path:    {pibt_path}")
+            
+            # Reverse PIBT and find overlap with restore path
+            pibt_reversed = pibt_path[::-1]
+            
+            # Find common suffix
+            overlap = 0
+            for i in range(1, min(len(restore_path), len(pibt_reversed)) + 1):
+                if restore_path[-i:] == pibt_reversed[:i]:
+                    overlap = i
+            
+            if overlap > 0:
+                # Trim the overlapping moves from rotated_stack
+                trimmed_stack[agent] = rotated_stack[agent][overlap:]
+                print(f"[TRIM] A{agent}: Trimmed {overlap} redundant moves (overlap found)")
+            else:
+                trimmed_stack[agent] = rotated_stack[agent]
+        
+        return trimmed_stack
+
     def update_curr_state(self, Pre, current_state):
         for a in range(self.num_agents):
             if a in Pre.keys() and Pre[a]:
