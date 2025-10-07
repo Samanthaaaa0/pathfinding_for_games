@@ -813,7 +813,8 @@ class PIBT:
         print(f"[MOVE GROUP] Moving agents {agents} to high-degree vertex {v}")
         print(f"[MOVE GROUP] Path: {path}")
         
-        if not path or len(agents) < 2:
+        if not path:
+            print("no way bro")
             return False
         
         # Find the agent already on the path

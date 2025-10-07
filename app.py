@@ -3,11 +3,11 @@
 import argparse
 import os
 
-from tkinter import *
-
 from pibt.pibt_new import (
     PIBT
 )
+
+# from pibt.backup import (PIBT)
 
 # from pibt.oriori import (
 #     PIBT
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=30)
+    parser.add_argument("--max-timestep", type=int, default=100)
 
     parser.add_argument("--grid", dest="show_grid", action="store_true",
                         help="Show grid on the environment or not")
@@ -76,10 +76,6 @@ if __name__ == "__main__":
 
     # validation: True -> feasible solution
     print(f"solved: {is_valid_mapf_solution(grid, starts, goals, plan)}")
-
-    # json_output = pibt.export_to_json(plan, "output.json")
-
-
 
     # save result
     save_configs_for_visualizer(plan, args.output_file)
