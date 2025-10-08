@@ -1233,12 +1233,13 @@ class PIBT:
                         # Prepend connecting path to restoration path
                         rotated_stack[agent] = rotated_stack[agent] + connecting_moves
                         print(f"[RESTORE FIX] A{agent}: Added connecting path {path_to_v}")
+                
 
         max_len = max(len(rotated_stack[a]) for a in involved_agents if rotated_stack[a])
 
         # Iterate through timesteps in REVERSE
         for t in range(max_len - 1, -1, -1):
-            Pre = {k: [] for k in range(self.num_agents)}
+            # Pre = {k: [] for k in range(self.num_agents)}
             
             for agent in involved_agents:
                 if t < len(rotated_stack[agent]):
@@ -1247,11 +1248,14 @@ class PIBT:
                     
                     if current_state[agent] == to_pos and from_pos != to_pos:
                         Pre[agent].append(from_pos)
+                        
                         print(f"[RESTORE t={t}] A{agent}: {to_pos} -> {from_pos}")
             
-            # TODO: make it parallel
-            self.generate_config(Pi, Pre, current_state, i_moveto)
-            current_state = Pi[-1].copy()
+                # TODO: make it parallel
+        self.update_curr_state(Pre, current_state)
+
+        self.generate_config(Pi, Pre, current_state, i_moveto)
+        current_state = Pi[-1].copy()
 
         print(f"[RESTORE] Final positions: {current_state}")
                     
