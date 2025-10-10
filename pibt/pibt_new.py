@@ -29,9 +29,12 @@ class PIBT:
         self.restore_paths = {}  # agent_id -> stack of positions to restore
         self.swapping_agents = set()
 
-        self.movement_stack = {}  # agent_id -> stack of (old_pos, new_pos, is_exchange_move)
         self.exchange_positions = {}  # agent_id -> final position after all exchanges
         self.in_swap_operation = False
+
+        # restore restore
+        self.move_stack = [[] for _ in range(self.num_agents)]  # list of (path to v)
+        self.swap_stack = [[] for _ in range(self.num_agents)]  # list of (path from to other place (for swap)
 
         # Parallel execution state - just simple arrays
         self.current_timestep = 0
@@ -52,6 +55,7 @@ class PIBT:
         # self.push_count_reset_interval = self./livelock_threshold * 2
         self.current_step_count = 0
 
+
     def funcPIBT(self, i_from: Config, i_moveto: Config, i: int = 0, root_agent: int = None) -> bool:
         """
         Recursive function to implement the PIBT algorithm.
@@ -60,17 +64,17 @@ class PIBT:
         if i >= self.num_agents:
             return True
         
-        # if i != root_agent:
-        #     if self.register_push(i, root_agent):  # j was pushed by i
-        #         print(f"[LIVELOCK] Livelock detected during PIBT execution")
+        if i != root_agent:
+            if self.register_push(i, root_agent):  # j was pushed by i
+                print(f"[LIVELOCK] Livelock detected during PIBT execution")
         
         if self.restore:
             return self.handle_restore_agent(i, i_from, i_moveto)
 
         '''HANDLE LIVELOCK'''
-        # if self.livelock_detected and i in self.involved_agents:
-        #     print(f"[LIVELOCK] Agent {i} involved in livelock, triggering resolution")
-        #     return self.handle_livelock_agent(i, i_from, i_moveto)
+        if self.livelock_detected and i in self.involved_agents:
+            print(f"[LIVELOCK] Agent {i} involved in livelock, triggering resolution")
+            return self.handle_livelock_agent(i, i_from, i_moveto)
 
         # get candidate configurations
         candidate = [i_from[i]] + get_neighbors(self.grid, i_from[i])
@@ -104,7 +108,6 @@ class PIBT:
                     else:
                         # Allow bounded waiting
                         self.root_wait_count[i] += 1
-                # print("wait_count:",self.root;_wait_count)
 
             j = self.occupied_now[v]
 
@@ -230,7 +233,7 @@ class PIBT:
                 configs.append(Q)
 
             Q = configs[-1]
-            print(f"Step {len(configs) - 1}: {Q}")
+            # print(f"Step {len(configs) - 1}: {Q}")
 
             # update priorities & goal check
             # todo: comment it so wont occur "priority problem"
@@ -257,12 +260,10 @@ class PIBT:
     def clear_vertex(self, Pre, v: Coord, current_config: Config, U: set[Coord], i_moveto: Config, reserved_positions) -> bool:
         # Find which agent is at vertex v
         agent_at_v = self.get_agent_at_position(current_config, v)
-        
+
         if agent_at_v == self.NIL:
             return True  # Vertex is already clear
-        
-        # print(f"[CLEAR_VERTEX] Trying to clear vertex {v}, occupied by agent {agent_at_v}")
-        
+
         # Check neighbors of v for empty spots
         for neighbor in get_neighbors(self.grid, v):
             if neighbor in U:
@@ -275,7 +276,8 @@ class PIBT:
                 and neighbor not in i_moveto \
                 and neighbor not in reserved_positions:
 
-                self.movement_stack[agent_at_v].append((current_config[agent_at_v], neighbor, False))
+                # self.movement_stack[agent_at_v].append((current_config[agent_at_v], neighbor, False))
+                self.swap_stack[agent_at_v].append(neighbor)
 
                 # Reserve the neighbor to prevent collisions
                 reserved_positions.add(neighbor)
@@ -394,19 +396,21 @@ class PIBT:
 
         if agent_at_v != self.NIL and agent_at_v not in {r0, s0}:
             print(f"[CLEAR] High-degree vertex {v} is occupied by agent {agent_at_v}")
-            
+
             # First, try to move the agent at v to a safe location
             v_neighbors = get_neighbors(self.grid, v)
             for safe_spot in v_neighbors:
                 if (safe_spot not in current_config and 
                     safe_spot not in reserved_positions):
-                    
+
                     print(f"[CLEAR] Moving agent {agent_at_v} from {v} to {safe_spot}")
                     Pre[agent_at_v].append(safe_spot)
                     current_config[agent_at_v] = safe_spot
                     reserved_positions.add(safe_spot)
-                    self.movement_stack[agent_at_v].append((i_from[agent_at_v], safe_spot, False))
+
+                    self.swap_stack[agent_at_v].append(safe_spot)
                     break
+
             else:
                 # If no immediate neighbor is free, try to clear one
                 for safe_spot in v_neighbors:
@@ -414,11 +418,12 @@ class PIBT:
                     if self.clear_vertex(Pre, safe_spot, current_config, U, i_moveto, reserved_positions):
                         print(f"[CLEAR] Cleared {safe_spot} and moving agent {agent_at_v} there")
 
-                        self.movement_stack[agent_at_v].append((i_from[agent_at_v], safe_spot, False))
+                        self.swap_stack[agent_at_v].append(safe_spot)
                         Pre[agent_at_v].append(safe_spot)
                         current_config[agent_at_v] = safe_spot
                         reserved_positions.add(safe_spot)
                         break
+
                 else:
                     print(f"[CLEAR_STACK] Failed to relocate agent {agent_at_v} from vertex {v}")
                     return False
@@ -525,7 +530,8 @@ class PIBT:
                 for k in Pi0[i]:
                     if k not in Pre[i]:
                         Pre[i].append(k)
-                        self.movement_stack[i].append((i_from[i], k, False))
+                        # self.movement_stack[i].append((i_from[i], k, False))
+                        self.swap_stack[i].append(k)
             return True
         
         print("[CLEAR] Stage 3 FAILED ...............................")
@@ -541,7 +547,6 @@ class PIBT:
         
         # Choose a neighbor n != v0 or ε
         n = next((x for x in neighbors if x not in {v0, ε}), None)
-        print("n:",n,"e:",ε,"v0:",v0,"v:",v)
         if n is None:
             return False
         
@@ -549,7 +554,6 @@ class PIBT:
 
         if n in occupied_positions:
             t = self.get_agent_at_position(current_config, n)
-            print("t:",t)
 
         # Move t -> v -> ε
         A1 = current_config.copy()
@@ -562,8 +566,11 @@ class PIBT:
 
         Pre[t].append(v)
         Pre[t].append(ε)
-        self.movement_stack[t].append((i_from[t], v, False))
-        self.movement_stack[t].append((v, ε, False))
+        # self.movement_stack[t].append((i_from[t], v, False))
+        # self.movement_stack[t].append((v, ε, False))
+
+        self.swap_stack[t].append(v)
+        self.swap_stack[t].append(ε)
 
         print(f"[CLEAR] Moved agent {t} from {n} to {v} and then to {ε}")
         
@@ -575,7 +582,7 @@ class PIBT:
             return config.index(pos)
         except ValueError:
             return self.NIL
-        
+
     def handle_restore_agent(self, i: int, i_from: Config, i_moveto: Config) -> bool:
         """
         Handle agent movement during restore mode.
@@ -685,11 +692,14 @@ class PIBT:
                             break
                 
                 if safe_pos:
-                    if self.movement_stack[agent_at_pos] and self.movement_stack[agent_at_pos][-1][1] != current_config[agent_at_pos]:
+                    # if self.movement_stack[agent_at_pos] and self.movement_stack[agent_at_pos][-1][1] != current_config[agent_at_pos]:
+                    if self.swap_stack[agent_at_pos] and self.swap_stack[agent_at_pos][-1] != current_config[agent_at_pos]:
                         print("WRONG STACK! - clear_path_to_vertex")
-                        print(f"last pos: {self.movement_stack[agent_at_pos][-1][1]}, current pos: {current_config[agent_at_pos]}")
+                        print(f"last pos: {self.swap_stack[agent_at_pos][-1]}, current pos: {current_config[agent_at_pos]}")
                     else:
-                        self.movement_stack[agent_at_pos].append((current_config[agent_at_pos], neighbor, False))
+                        # self.movement_stack[agent_at_pos].append((current_config[agent_at_pos], neighbor, False))
+                        self.swap_stack[agent_at_pos].append(neighbor)
+
                     Pre[agent_at_pos].append(safe_pos)
                     current_config[agent_at_pos] = safe_pos
                     print(f"[CLEAR_PATH] Moved agent {agent_at_pos} from {pos} to {safe_pos}")
@@ -707,6 +717,9 @@ class PIBT:
         # print(f"[MOVE GROUP] Path: {path}")
 
         # print("teeth:", self.movement_stack[0])
+
+        for agent in agents:
+            self.move_stack[agent].append(temp_from[agent])
         
         if not path:
             print("no way bro")
@@ -729,7 +742,9 @@ class PIBT:
             #     print("WRONG STACK! - clear_path_to_vertex")
             #     print(f"last pos: {self.movement_stack[path_agent][-1][1]}, current pos: {temp_from[path_agent]}")
             # else:
-            self.movement_stack[path_agent].append((temp_from[path_agent], path[0], False))
+            # self.movement_stack[path_agent].append((temp_from[path_agent], path[0], False))
+            self.move_stack[path_agent].append(path[0])
+
             Pre[path_agent].append(path[0])
             temp_from[path_agent] = path[0]
             start_idx = 0
@@ -748,7 +763,8 @@ class PIBT:
             
             # Lead agent moves forward
             old_pos = temp_from[path_agent]
-            self.movement_stack[path_agent].append((old_pos, next_pos, False))
+            # self.movement_stack[path_agent].append((old_pos, next_pos, False))
+            self.move_stack[path_agent].append(next_pos)
             Pre[path_agent].append(next_pos)
             temp_from[path_agent] = next_pos
             print(f"  Lead agent {path_agent}: {old_pos} -> {next_pos}")
@@ -759,14 +775,18 @@ class PIBT:
             for i, follower in enumerate(followers):
                 if i == 0:  # First follower takes lead's old position
                     follower_old = temp_from[follower]
-                    self.movement_stack[follower].append((follower_old, prev_pos, False))
+                    # self.movement_stack[follower].append((follower_old, prev_pos, False))
+                    self.move_stack[follower].append(prev_pos)
+
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
                     print(f"  Follower {follower}: {follower_old} -> {prev_pos}")
                     prev_pos = follower_old  # For next follower
                 else:  # Additional followers take previous follower's old position
                     follower_old = temp_from[follower] 
-                    self.movement_stack[follower].append((follower_old, prev_pos, False))
+                    # self.movement_stack[follower].append((follower_old, prev_pos, False))
+                    self.move_stack[follower].append(prev_pos)
+
                     Pre[follower].append(prev_pos)
                     temp_from[follower] = prev_pos
                     print(f"  Follower {i+1} {follower}: {follower_old} -> {prev_pos}")
@@ -784,14 +804,18 @@ class PIBT:
                 if path_agent == lead_agent:
                     # Move lead agent to vertex
                     old_pos = temp_from[lead_agent]
-                    self.movement_stack[lead_agent].append((old_pos, v, False))
+                    # self.movement_stack[lead_agent].append((old_pos, v, False))
+                    self.move_stack[lead_agent].append(v)
+
                     Pre[lead_agent].append(v)
                     temp_from[lead_agent] = v
                     print(f"  FINAL: Lead agent {lead_agent}: {old_pos} -> {v}")
                 else:
                     # Move other agent to vertex  
                     old_pos = temp_from[other_agent]
-                    self.movement_stack[other_agent].append((old_pos, v, False))
+                    # self.movement_stack[other_agent].append((old_pos, v, False))
+                    self.move_stack[other_agent].append(v)
+
                     Pre[other_agent].append(v)
                     temp_from[other_agent] = v
                     print(f"  FINAL: Other agent {other_agent}: {old_pos} -> {v}")
@@ -805,7 +829,7 @@ class PIBT:
             return False
             
         return True
-    
+
     def simulate_agent_only_pibt(self, agent_id: int, start_config: Config, detected_swaps: List, max_steps: int = 5) -> tuple[list[Config], list[tuple[int, int]]]:
         """
         Simulate PIBT for a specific agent only to detect additional swaps needed.
@@ -820,7 +844,6 @@ class PIBT:
         # create swap config
         simulation_sequence = [start_config.copy()]
         current_config = start_config.copy()
-        # detected_swaps = []
         
         for _ in range(max_steps):
             
@@ -929,7 +952,7 @@ class PIBT:
 
         # Initialize stack-based tracking
         self.in_swap_operation = True
-        self.movement_stack = {i: [] for i in range(self.num_agents)}
+        # self.movement_stack = {i: [] for i in range(self.num_agents)}
         
         # Initialize state tracking
         Pi = [i_from.copy()]
@@ -991,7 +1014,6 @@ class PIBT:
         
         return True
 
-    # good!
     def setup_exchange_area(self, Pre: dict, involved_agents: list, v: Coord, path: list, current_state: Config, i_moveto: Config) -> bool:
         """
         Setup the exchange area by clearing paths and positioning agents.
@@ -1009,17 +1031,16 @@ class PIBT:
         if not self.clear(Pre, involved_agents[0], involved_agents[1], v, current_state, i_moveto, path):
             print("[SETUP_AREA] Failed to clear around vertex")
             return False
+
+        
         
         # Move involved agents to the vicinity of the vertex
         if not self.move_agents_to_high_vertex(Pre, involved_agents, v, current_state, i_moveto, path):
             print("[SETUP_AREA] Failed to move agents to exchange area")
             return False
-        
-        print(self.movement_stack)
-        
+                
         return True
 
-    # good
     def position_agents_for_exchange(self, Pre: dict, a: int, b: int, v: Coord, current_state: Config, i_moveto, original_path: list, involved_agents) -> bool:
         """
         Ensure agents a and b are properly positioned for exchange at vertex v.
@@ -1088,8 +1109,8 @@ class PIBT:
         print("-"*50)
 
         self.in_swap_operation = True
-        self.movement_stack = {i: [] for i in range(self.num_agents)}
-        
+        # self.movement_stack = {i: [] for i in range(self.num_agents)}
+
         Pi = [i_from.copy()]
         Pre = {k: [] for k in range(self.num_agents)}
         current_state = i_from.copy()
@@ -1117,36 +1138,29 @@ class PIBT:
         
         # Move i aside
         Pre[i].append(wait_spot)
-        self.movement_stack[i].append((current_state[i], wait_spot, False))
+
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
+        # self.update_curr_state(Pre, current_state)
         Pre = {k: [] for k in range(self.num_agents)}
 
-        state_b4_moving = current_state.copy()
+        # state_b4_moving = current_state.copy()
         
         print(f"[CORRIDOR] A{i} -> {wait_spot}")
         
         # Each swapping agent passes through
         for agent in swap_chain:
 
-            print(f"\n\t[CORRIDOR SWAP] A{agent}'s turn...\n")
-
             prev_state = current_state.copy()
+
+            print(f"\n\t[CORRIDOR SWAP] A{agent}'s turn...\n")
 
             if not self.move_agents_to_high_vertex(Pre, [agent], v, current_state, i_moveto, path):
                 print("[CORRIDOR SWAP] MOVE FAILED")
                 return False
-            
-            for a in involved_agents:
-                if a != i:
-                    if prev_state[a] == current_state[a]:
-                        if self.movement_stack[a][-1][1] != prev_state[a]:
-                            print("WRONG STACK! - clear_path_to_vertex")
-                            print(f"last pos: {self.movement_stack[a][-1][1]}, current pos: {prev_state[a]}")
-                        else:
-                            self.movement_stack[a].append((prev_state[a], prev_state[a], False))
 
-            prev_pos = Pre[agent][-2] if len(Pre[agent])>1 else state_b4_moving[agent]
+            prev_pos = Pre[agent][-2] if len(Pre[agent])>1 else prev_state[agent]
+
             print(f"[CORRIDOR SWAP] A{agent}'s previous position: {prev_pos}")
 
             self.update_curr_state(Pre, current_state)
@@ -1182,6 +1196,11 @@ class PIBT:
                 
             self.update_curr_state(Pre, current_state)
 
+            # update wait?
+            for aa in swap_chain:
+                if aa != agent and Pre[aa] and current_state[aa] == prev_state[aa]:
+                    self.swap_stack[aa].append(current_state[aa])
+
         self.generate_config(Pi, Pre, current_state, i_moveto)
         current_state = Pi[-1].copy()
         
@@ -1191,74 +1210,12 @@ class PIBT:
         current_state = Pi[-1].copy()
         
         print(f"\n[CORRIDOR] A{i} back to {v}")
-        
-        print("\n[RESTORE] Moving to final swapped positions...")
 
-        # Use list instead of dict
-        rotated_stack = [[] for _ in range(self.num_agents)]
+        # RESTORE TIME
+        if not self.restore_func(i, involved_agents, prev_state, Pi, i_moveto):
+            print("[CORRIDOR] RESTORE FAILED")
+            return False
 
-        for idx, agent in enumerate(involved_agents):
-            if idx == 0:  # agent i
-                rotated_stack[agent] = self.movement_stack[involved_agents[-1]].copy()
-                print(f"ROTATE: A{agent} takes A{involved_agents[-1]}'s stack")
-            else:
-                rotated_stack[agent] = self.movement_stack[involved_agents[idx-1]].copy()
-                print(f"ROTATE: A{agent} takes A{involved_agents[idx-1]}'s stack")
-
-        rotated_stack = self.trim_redundant_restoration(rotated_stack, involved_agents, current_state)
-
-        print()
-        for agent in involved_agents:
-            print(f"A{agent}: {rotated_stack[agent]}")
-        print()
-
-        print("\n[RESTORE FIX] Checking for position mismatches...")
-        for agent in involved_agents:
-            if rotated_stack[agent]:
-                # Expected starting position (where restoration should begin from)
-                expected_start = rotated_stack[agent][-1][1]  # Last move's to_pos
-                
-                if current_state[agent] != expected_start:
-                    print(f"[RESTORE FIX] A{agent}: Mismatch - at {current_state[agent]}, need {expected_start}")
-                    
-                    # Find path to high-degree vertex v
-                    path_to_v = self.find_path_to_vertex(current_state[agent], v)
-                    
-                    if path_to_v and len(path_to_v) > 1:
-                        # Convert path to move tuples and prepend to rotated_stack
-                        connecting_moves = []
-                        for i in range(len(path_to_v) - 1):
-                            connecting_moves.append((path_to_v[i], path_to_v[i+1], False))
-                        
-                        # Prepend connecting path to restoration path
-                        rotated_stack[agent] = rotated_stack[agent] + connecting_moves
-                        print(f"[RESTORE FIX] A{agent}: Added connecting path {path_to_v}")
-                
-
-        max_len = max(len(rotated_stack[a]) for a in involved_agents if rotated_stack[a])
-
-        # Iterate through timesteps in REVERSE
-        for t in range(max_len - 1, -1, -1):
-            # Pre = {k: [] for k in range(self.num_agents)}
-            
-            for agent in involved_agents:
-                if t < len(rotated_stack[agent]):
-                    move = rotated_stack[agent][t]
-                    from_pos, to_pos, _ = move
-                    
-                    if current_state[agent] == to_pos and from_pos != to_pos:
-                        Pre[agent].append(from_pos)
-                        
-                        print(f"[RESTORE t={t}] A{agent}: {to_pos} -> {from_pos}")
-            
-                # TODO: make it parallel
-        self.update_curr_state(Pre, current_state)
-
-        self.generate_config(Pi, Pre, current_state, i_moveto)
-        current_state = Pi[-1].copy()
-
-        print(f"[RESTORE] Final positions: {current_state}")
-                    
         self.new_configs = Pi[1:]
         self.in_swap_operation = False
             
@@ -1268,6 +1225,10 @@ class PIBT:
         """Simple BFS to find path from start to target."""
         if start == target:
             return [start]
+        
+        # if start just one step away from target, return direct path
+        if target in get_neighbors(self.grid, start):
+            return [start, target]
         
         queue = [(start, [start])]
         visited = {start}
@@ -1284,21 +1245,21 @@ class PIBT:
                     queue.append((nbr, path + [nbr]))
         
         return []  # No path found
-        
+
     def trim_redundant_restoration(self, rotated_stack: list, involved_agents: list, current_state: Config) -> list:
         """
         Simulate PIBT after restoration and remove redundant moves by comparing path lists.
         """
-        print("\n[TRIM] Analyzing restoration paths for redundancy...")
+        # print("\n[TRIM] Analyzing restoration paths for redundancy...")
         
         # Calculate where agents will be AFTER full restoration
         post_restore_config = current_state.copy()
         for agent in involved_agents:
             if rotated_stack[agent]:
                 # Get final position after all restoration moves
-                post_restore_config[agent] = rotated_stack[agent][0][0]  # First move's from_pos
+                post_restore_config[agent] = rotated_stack[agent][-1]
         
-        print(f"[TRIM] Post-restoration positions: {[post_restore_config[a] for a in involved_agents]}")
+        # print(f"[TRIM] Post-restoration positions: {[post_restore_config[a] for a in involved_agents]}")
         
         # Simulate PIBT for a few steps
         orig_swap = self.in_swap_operation
@@ -1333,16 +1294,16 @@ class PIBT:
             
             # Convert restore moves to path list (remove consecutive duplicates)
             restore_path = [current_state[agent]]
-            for from_pos, to_pos, _ in rotated_stack[agent][::-1]:  # Reverse to get forward order
-                if to_pos != restore_path[-1]:  # Skip duplicates
-                    restore_path.append(to_pos)
-            restore_path.append(rotated_stack[agent][0][0])
+            for move in rotated_stack[agent]:  # Reverse to get forward order
+                if move != restore_path[-1]:  # Skip duplicates
+                    restore_path.append(move)
+            # restore_path.append(rotated_stack[agent][-1]) # Final position after restoration
             
             # Convert PIBT sim to path list (already filtered above)
             pibt_path = [config[agent] for config in sim_configs]
             
-            print(f"\n[TRIM] A{agent} restore path: {restore_path}")
-            print(f"[TRIM] A{agent} PIBT path:    {pibt_path}")
+            # print(f"\n[TRIM] A{agent} restore path: {restore_path}")
+            # print(f"[TRIM] A{agent} PIBT path:    {pibt_path}")
             
             # Reverse PIBT and find overlap with restore path
             pibt_reversed = pibt_path[::-1]
@@ -1355,17 +1316,88 @@ class PIBT:
             
             if overlap > 0:
                 # Trim the overlapping moves from rotated_stack
-                trimmed_stack[agent] = rotated_stack[agent][overlap:]
-                print(f"[TRIM] A{agent}: Trimmed {overlap} redundant moves (overlap found)")
+                trimmed_stack[agent] = rotated_stack[agent][:overlap]
+                # print(f"[TRIM] A{agent}: Trimmed {overlap} redundant moves (overlap found)")
             else:
                 trimmed_stack[agent] = rotated_stack[agent]
+            
+        print("\n[TRIM] Trimmed restoration paths:")
+        for a in involved_agents:
+            print(f"A{a}: {trimmed_stack[a]}")
+        print()
         
         return trimmed_stack
+
+    def restore_func(self, i: int, involved_agents: list, current_state: Config, Pi: list, i_moveto: Config) -> bool:
+        print("\n[RESTORE] Moving to final swapped positions...")
+        Pre = {k: [] for k in range(self.num_agents)}
+
+        # Use list instead of dict
+        rotated_stack = [[] for _ in range(self.num_agents)]
+
+        for idx, agent in enumerate(involved_agents):
+            if idx == 0:  # agent i
+                rotated_stack[agent] = self.move_stack[involved_agents[-1]].copy()
+            else:
+                rotated_stack[agent] = self.move_stack[involved_agents[idx-1]].copy()
+
+        print()
+        for agent in involved_agents:
+            print(f"A{agent}: {rotated_stack[agent]}")
+        print()
+
+        # update actual stack
+        print("[RESTORE] Merging rotated stacks with swap stacks...")
+
+        for a in involved_agents:
+            print("SWAP STACK:", self.swap_stack[a])
+            rotated_stack[a] = rotated_stack[a] + self.swap_stack[a]
+
+        print()
+        for agent in involved_agents:
+            print(f"A{agent}: {rotated_stack[agent]}")
+        print()
+
+        rotated_stack = {a: list(reversed(rotated_stack[a])) for a in involved_agents}
+        rotated_stack = self.trim_redundant_restoration(rotated_stack, involved_agents, current_state)
+
+        # Restore order: i first, then others reversed
+        restore_order = [i] + [a for a in involved_agents[::-1] if a != i]
+        print("restore order:", restore_order)
+
+        for step in range(max(len(rotated_stack[a]) for a in restore_order)):
+            # Pre = {k: [] for k in range(self.num_agents)}
+            
+            for agent in restore_order:
+                if step < len(rotated_stack[agent]):
+                    target = rotated_stack[agent][step]
+
+                    # if target not in current_state or target == current_state[agent]:
+                    Pre[agent].append(target)
+                    current_state[agent] = target
+
+                     # TODO: 小蓝不走 气鼠了
+                    # this condition is wrong and i wnat to change but idk how
+                    # elif target in current_state and target != current_state[agent]: # conflict, wait a timestep and move to the target
+                    # else:
+                    #     # blocking = [a for a, pos in current_state if pos == target][0]
+                    #     Pre[agent].append(current_state[agent])
+                    #     # Pre[agent].append(target)
+                    #     current_state[agent] = current_state[agent]
+
+       
+        
+        self.generate_config(Pi, Pre, current_state, i_moveto)
+        current_state = Pi[-1].copy()
+
+        print(f"[RESTORE] Final positions: {current_state}")
+
+        return Pi
+
 
     def update_curr_state(self, Pre, current_state):
         for a in range(self.num_agents):
             if a in Pre.keys() and Pre[a]:
-                # print("PRE[a]:", Pre[a])
                 current_state[a] = Pre[a][-1]
 
     '''
@@ -1450,3 +1482,5 @@ class PIBT:
             
         print("BRO TOO SAD JUST DIE")
         return False
+
+
