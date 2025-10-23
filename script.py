@@ -77,10 +77,10 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
             print(f"  Map dimensions: {height}x{width}, max timestep: {max_timestep}")
         else:
             max_timestep = 1000  # fallback
-            print(f"  Could not determine map size, using fallback: {max_timestep}")
+            print(f"  Could not determine map size, using  fallback: {max_timestep}")
     
     cmd = [
-        "python", "app.py",
+        "python3", "app.py",
         "-m", map_file,
         "-i", scen_file,
         "-N", str(num_agents),
