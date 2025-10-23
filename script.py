@@ -9,6 +9,11 @@ import subprocess
 import os
 import time
 import glob
+from collections import defaultdict
+
+PIBT_VERSIONS = ["pibt_new", "oriori", "oripibt"]
+
+
 
 def get_map_dimensions(map_file):
     """Parse map file to get dimensions (height, width)"""
@@ -28,7 +33,6 @@ def get_map_dimensions(map_file):
                 width = int(line.split()[-1])
         
         if height is None or width is None:
-            # Fallback: count actual map lines
             map_lines = [line for line in lines if line.strip() and not line.startswith(('type', 'height', 'width', 'map'))]
             height = len(map_lines)
             width = len(map_lines[0].strip()) if map_lines else 0
@@ -62,7 +66,7 @@ def analyze_failure_reason(stdout_content, max_timestep):
     
     return 'unknown'
 
-def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=None):
+def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=None, pibt_version="pibt_new"):
     """Run a single experiment"""
     
     # Calculate max timestep if not provided
@@ -81,7 +85,8 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
         "-i", scen_file,
         "-N", str(num_agents),
         "-o", output_file,
-        "--max-timestep", str(max_timestep)
+        "--max-timestep", str(max_timestep),
+        "--pibt-version", pibt_version
     ]
     
     print(f"Running: {os.path.basename(map_file)} + {os.path.basename(scen_file)} (N={num_agents})")
@@ -93,146 +98,213 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
 
         solved = "solved: True" in result.stdout
         
-        if solved:
-            print(f"  Result: ✅ ({runtime:.2f}s)")
-            failure_reason = None
-        else:
-            failure_reason = analyze_failure_reason(result.stdout, max_timestep)
-            failure_emoji = {
-                'insufficient_time': '⏰',
-                'livelock': '🔄',
-                'deadlock': '🚫',
-                'unknown': '❌'
-            }
-            
-            print(f"  Result: {failure_emoji.get(failure_reason, '❌')} - {failure_reason.replace('_', ' ').title()} ({runtime:.2f}s)")
-
         if result.stderr:
-            print(f"  Error: {result.stderr}")
+            print(f"    ⚠️  Warning: {result.stderr[:100]}")
         
         # Save detailed output for failed cases
         if not solved:
             debug_file = output_file.replace('.txt', '_debug.txt')
             with open(debug_file, 'w') as f:
                 f.write(f"Command: {' '.join(cmd)}\n")
+                f.write(f"PIBT Version: {pibt_version}\n")
                 f.write(f"Max timestep: {max_timestep}\n")
-                f.write(f"Failure reason: {failure_reason}\n")
                 f.write(f"Runtime: {runtime:.2f}s\n")
                 f.write(f"\nSTDOUT:\n{result.stdout}\n")
                 f.write(f"\nSTDERR:\n{result.stderr}\n")
             
-        return solved, runtime, failure_reason, max_timestep
+        return solved, runtime, max_timestep
         
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False, 0, 'error', max_timestep
+        print(f"    ERROR: {e}")
+        return False, 0, max_timestep
 
 def main():
-    # Create output directory
+    # Create output directories
     os.makedirs("batch_results", exist_ok=True)
+    for version in PIBT_VERSIONS:
+        os.makedirs(f"batch_results/{version}", exist_ok=True)
     
-    # Auto-generate experiments by scanning directories
+    # Auto-generate experiments by scanning directories -> FILE
     experiments = []
 
-    # Add your specific experiment
+    # Add specific experiments
     experiments.append(("assets/small.map", "assets/small-random-1.scen", 2))
     experiments.append(("assets/pushmap.map", "assets/pushmap-random-1.scen", 5))
     
     # Find all maps
     for map_file in glob.glob("assets/*.map"):
         map_name = os.path.basename(map_file).replace('.map', '')
-        print(f"Found map: {map_name}")
         
-        # Find corresponding scenarios in assets/scen/
+        # Find corresponding scenarios
         scen_pattern = f"assets/scen/{map_name}-random-*.scen"
         scen_files = glob.glob(scen_pattern)
-        
-        print(f"  Found {len(scen_files)} scenarios for {map_name}")
         
         for scen_file in scen_files:
             experiments.append((map_file, scen_file, 50))  
 
-    print(f"\nTotal experiments to run: {len(experiments)}")
+    print(f"\n{'='*80}")
+    print(f"PIBT VERSION COMPARISON BATCH RUNNER")
+    print(f"{'='*80}")
+    print(f"Testing {len(PIBT_VERSIONS)} versions: {', '.join(PIBT_VERSIONS)}")
+    print(f"Total experiments per version: {len(experiments)}")
+    print(f"Total runs: {len(experiments) * len(PIBT_VERSIONS)}")
+    print(f"{'='*80}\n")
     
     # If no experiments found, show debug info
     if len(experiments) == 0:
-        print("No experiments found! Debug info:")
+        print("⚠️  No experiments found! Debug info:")
         print(f"Maps found: {glob.glob('assets/*.map')}")
         print(f"Scenarios found: {glob.glob('assets/scen/*.scen')}")
         return
     
-    # Run all experiments
-    results = []
-    total_time = 0
-    failure_stats = {}
+    # Store results for comparison
+    all_results = defaultdict(list)  # version -> list of results
     
-    print(f"Starting batch run with {len(experiments)} experiments...")
-    print("="*80)
+    # Run all experiments for each version
+    for version in PIBT_VERSIONS:
+        print(f"\n{'='*80}")
+        print(f"TESTING VERSION: {version.upper()}")
+        print(f"{'='*80}\n")
+        
+        version_results = []
+        version_time = 0
+        
+        for i, (map_file, scen_file, num_agents) in enumerate(experiments, 1):
+            # Create output filename
+            map_name = os.path.basename(map_file).replace('.map', '')
+            scen_name = os.path.basename(scen_file).replace('.scen', '')
+            output_file = f"batch_results/{version}/{map_name}_{scen_name}_N{num_agents}.txt"
+            
+            print(f"[{i}/{len(experiments)}] {map_name} + {scen_name} (N={num_agents})")
+            
+            solved, runtime, max_timestep = run_experiment(
+                map_file, scen_file, num_agents, output_file, pibt_version=version
+            )
+            
+            status_emoji = "✅" if solved else "❌"
+            print(f"  {status_emoji} {version}: {'SOLVED' if solved else 'FAILED'} ({runtime:.2f}s)")
+            
+            version_results.append({
+                'map': map_name,
+                'scenario': scen_name,
+                'agents': num_agents,
+                'solved': solved,
+                'runtime': runtime,
+                'max_timestep': max_timestep
+            })
+            version_time += runtime
+        
+        all_results[version] = version_results
+        
+        # Print version summary
+        solved_count = sum(1 for r in version_results if r['solved'])
+        print(f"\n{version.upper()} Summary:")
+        print(f"  Solved: {solved_count}/{len(version_results)} ({solved_count/len(version_results)*100:.1f}%)")
+        print(f"  Total time: {version_time:.2f}s")
+        print(f"  Avg time: {version_time/len(version_results):.2f}s")
     
-    for i, (map_file, scen_file, num_agents) in enumerate(experiments, 1):
-        # Create output filename
+    # Generate comparison report
+    print(f"\n{'='*80}")
+    print("COMPARISON SUMMARY")
+    print(f"{'='*80}\n")
+    
+    # Overall statistics
+    print("Overall Statistics:")
+    print(f"{'Version':<15} {'Solved':<10} {'Success Rate':<15} {'Total Time':<12} {'Avg Time'}")
+    print("-" * 80)
+    
+    for version in PIBT_VERSIONS:
+        results = all_results[version]
+        solved_count = sum(1 for r in results if r['solved'])
+        total_time = sum(r['runtime'] for r in results)
+        avg_time = total_time / len(results)
+        success_rate = solved_count / len(results) * 100
+        
+        print(f"{version:<15} {solved_count}/{len(results):<7} {success_rate:>6.1f}%{'':<8} {total_time:>8.2f}s    {avg_time:.2f}s")
+    
+    # Detailed comparison for each experiment
+    print(f"\n{'='*80}")
+    print("Detailed Per-Experiment Comparison:")
+    print(f"{'='*80}\n")
+    
+    comparison_data = []
+    
+    for i, (map_file, scen_file, num_agents) in enumerate(experiments):
         map_name = os.path.basename(map_file).replace('.map', '')
         scen_name = os.path.basename(scen_file).replace('.scen', '')
-        output_file = f"batch_results/{map_name}_{scen_name}_N{num_agents}.txt"
         
-        print(f"[{i}/{len(experiments)}]", end=" ")
-        solved, runtime, failure_reason, max_timestep = run_experiment(
-            map_file, scen_file, num_agents, output_file
-        )
+        print(f"{map_name} + {scen_name} (N={num_agents}):")
         
-        results.append({
+        exp_comparison = {
             'map': map_name,
             'scenario': scen_name,
-            'agents': num_agents,
-            'solved': solved,
-            'runtime': runtime,
-            'failure_reason': failure_reason,
-            'max_timestep': max_timestep
-        })
-        total_time += runtime
+            'agents': num_agents
+        }
         
-        # Track failure statistics
-        if not solved and failure_reason:
-            failure_stats[failure_reason] = failure_stats.get(failure_reason, 0) + 1
-    
-    # Print summary
-    print("="*80)
-    print("BATCH RUN SUMMARY:")
-    print(f"Total experiments: {len(results)}")
-    solved_count = sum(1 for r in results if r['solved'])
-    print(f"Solved: {solved_count} ({solved_count/len(results)*100:.1f}%)")
-    print(f"Total time: {total_time:.2f}s")
-    print(f"Average time per experiment: {total_time/len(results):.2f}s")
-    
-    if failure_stats:
-        print(f"\nFailure breakdown:")
-        for reason, count in failure_stats.items():
-            print(f"  {reason.replace('_', ' ').title()}: {count}")
-    
-    # Save detailed summary to file
-    with open("batch_results/summary.txt", "w") as f:
-        f.write("Batch Run Summary\n")
-        f.write("="*50 + "\n")
-        f.write(f"Total experiments: {len(results)}\n")
-        f.write(f"Solved: {solved_count} ({solved_count/len(results)*100:.1f}%)\n")
-        f.write(f"Total time: {total_time:.2f}s\n")
-        f.write(f"Average time: {total_time/len(results):.2f}s\n\n")
+        for version in PIBT_VERSIONS:
+            result = all_results[version][i]
+            status = "✅ SOLVED" if result['solved'] else "❌ FAILED"
+            print(f"  {version:<12}: {status:<12} ({result['runtime']:.2f}s)")
+            
+            exp_comparison[f'{version}_solved'] = result['solved']
+            exp_comparison[f'{version}_time'] = result['runtime']
         
-        if failure_stats:
-            f.write("Failure breakdown:\n")
-            for reason, count in failure_stats.items():
-                f.write(f"  {reason.replace('_', ' ').title()}: {count}\n")
+        # Highlight differences
+        solved_versions = [v for v in PIBT_VERSIONS if all_results[v][i]['solved']]
+        failed_versions = [v for v in PIBT_VERSIONS if not all_results[v][i]['solved']]
+        
+        if solved_versions and failed_versions:
+            print(f"  ⚠️  Different results: {', '.join(solved_versions)} solved, {', '.join(failed_versions)} failed")
+        elif solved_versions:
+            times = [all_results[v][i]['runtime'] for v in PIBT_VERSIONS]
+            fastest = PIBT_VERSIONS[times.index(min(times))]
+            slowest = PIBT_VERSIONS[times.index(max(times))]
+            if max(times) > min(times) * 1.2:  # 20% difference
+                print(f"  🏃 {fastest} was fastest ({min(times):.2f}s), {slowest} was slowest ({max(times):.2f}s)")
+        
+        comparison_data.append(exp_comparison)
+        print()
+    
+    # Save detailed comparison to file
+    with open("batch_results/comparison_summary.txt", "w") as f:
+        f.write("PIBT VERSION COMPARISON SUMMARY\n")
+        f.write("="*80 + "\n\n")
+        
+        f.write(f"Versions tested: {', '.join(PIBT_VERSIONS)}\n")
+        f.write(f"Total experiments: {len(experiments)}\n\n")
+        
+        f.write("Overall Statistics:\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"{'Version':<15} {'Solved':<15} {'Success Rate':<15} {'Total Time':<15} {'Avg Time'}\n")
+        f.write("-" * 80 + "\n")
+        
+        for version in PIBT_VERSIONS:
+            results = all_results[version]
+            solved_count = sum(1 for r in results if r['solved'])
+            total_time = sum(r['runtime'] for r in results)
+            avg_time = total_time / len(results)
+            success_rate = solved_count / len(results) * 100
+            
+            f.write(f"{version:<15} {solved_count}/{len(results):<12} "
+                   f"{success_rate:.1f}%{'':<11} {total_time:.2f}s{'':<10} {avg_time:.2f}s\n")
+        
+        f.write("\n" + "="*80 + "\n")
+        f.write("Detailed Per-Experiment Results:\n")
+        f.write("="*80 + "\n\n")
+        
+        for exp in comparison_data:
+            f.write(f"{exp['map']} + {exp['scenario']} (N={exp['agents']}):\n")
+            for version in PIBT_VERSIONS:
+                status = "SOLVED" if exp[f'{version}_solved'] else "FAILED"
+                f.write(f"  {version:<12}: {status:<8} ({exp[f'{version}_time']:.2f}s)\n")
             f.write("\n")
-        
-        f.write("Detailed results:\n")
-        f.write("-" * 50 + "\n")
-        for r in results:
-            status = "SOLVED" if r['solved'] else f"FAILED ({r['failure_reason']})"
-            f.write(f"{r['map']} + {r['scenario']} (N={r['agents']}, max_t={r['max_timestep']}): "
-                   f"{status} ({r['runtime']:.2f}s)\n")
     
-    print("Results saved to batch_results/")
-    print("Check *_debug.txt files for detailed failure analysis")
+    print(f"\n{'='*80}")
+    print("✨ Results saved to:")
+    print(f"  - batch_results/comparison_summary.txt (main comparison)")
+    print(f"  - batch_results/<version>/ (individual results)")
+    print(f"  - batch_results/<version>/*_debug.txt (failure details)")
+    print(f"{'='*80}\n")
 
 if __name__ == "__main__":
-    main(),
+    main()

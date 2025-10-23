@@ -7,8 +7,6 @@ from pibt.pibt_new import (
     PIBT
 )
 
-# from pibt.backup import (PIBT)
-
 # from pibt.oriori import (
 #     PIBT
 # )
@@ -55,7 +53,15 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=100)
+    parser.add_argument("--max-timestep", type=int, default=1000)
+
+    parser.add_argument(
+        "--pibt-version",
+        type=str,
+        choices=["pibt_new", "oriori", "oripibt"],
+        default="pibt_new",
+        help="Select which PIBT implementation to use"
+    )
 
     parser.add_argument("--grid", dest="show_grid", action="store_true",
                         help="Show grid on the environment or not")
@@ -65,6 +71,15 @@ if __name__ == "__main__":
                         help="Show task indices or not")
     parser.add_argument("--plan", type=str, help="Path to the planned path file")
     args = parser.parse_args()
+
+    if args.pibt_version == "pibt_new":
+        from pibt.pibt_new import PIBT
+    elif args.pibt_version == "oriori":
+        from pibt.oriori import PIBT
+    elif args.pibt_version == "oripibt":
+        from pibt.oripibt import PIBT
+
+    print(f"Using PIBT version: {args.pibt_version}")
 
     # define problem instance
     grid = parse_map(args.map_file)
