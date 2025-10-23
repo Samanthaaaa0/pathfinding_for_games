@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced batch runner script with automatic max timestep calculation
-and failure reason detection.
+Enhanced parallel batch runner with automatic max timestep calculation,
+failure reason detection, and metrics extraction (makespan, sum of cost).
 """
 
 import math
@@ -9,11 +9,15 @@ import subprocess
 import os
 import time
 import glob
+import sys
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import re
 
 PIBT_VERSIONS = ["pibt_new", "oriori", "oripibt"]
 
-
+# Number of parallel processes
+NUM_PARALLEL = int(sys.argv[1]) if len(sys.argv) > 1 else 4
 
 def get_map_dimensions(map_file):
     """Parse map file to get dimensions (height, width)"""
@@ -21,7 +25,6 @@ def get_map_dimensions(map_file):
         with open(map_file, 'r') as f:
             lines = f.readlines()
         
-        # Find height and width from map file
         height = None
         width = None
         
@@ -42,42 +45,68 @@ def get_map_dimensions(map_file):
         print(f"Error reading map {map_file}: {e}")
         return None, None
 
-def analyze_failure_reason(stdout_content, max_timestep):
-    # """
-    # Analyze the failure reason based on output.
-    # Returns: 'insufficient_time', 'livelock', 'other', or 'unknown'
-    # """
-    # Look for specific patterns in the output
-    # if "max timestep reached" in stdout_content.lower():
-    #     return 'insufficient_time'
-    # elif "livelock" in stdout_content.lower():
-    #     return 'livelock'
-    # elif "deadlock" in stdout_content.lower():
-    #     return 'deadlock'
+def parse_output_metrics(output_file):
+    """
+    Parse the output file to extract makespan and sum of cost.    
+    """
+    try:
+        with open(output_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip() and ':' in line]
+        
+        if not lines:
+            return None, None
+        
+        # Makespan is the number of timesteps (number of lines)
+        makespan = len(lines)
+        
+        # Parse agent trajectories
+        agent_paths = defaultdict(list)
+        
+        for line in lines:
+            if ':' not in line:
+                continue
+            
+            # Extract agent positions from line
+            # Format: 0:(2,1),(2,2),(1,2)
+            parts = line.split(':')
+            if len(parts) < 2:
+                continue
+            
+            timestep = int(parts[0])
+            positions_str = parts[1]
+            
+            # extract (x,y) positions
+            positions = re.findall(r'\((\d+),(\d+)\)', positions_str)
+            
+            for agent_idx, (x, y) in enumerate(positions):
+                agent_paths[agent_idx].append((int(x), int(y)))
+        
+        # SOC
+        sum_of_cost = 0
+        for agent_idx, path in agent_paths.items():
+            # Cost is number of moves = path length - 1, or just path length if counting all steps
+            # Using path length (including start position)
+            agent_cost = 0
+            for i in range(1, len(path)):
+                # Count as move if position changed
+                if path[i] != path[i-1]:
+                    agent_cost += 1
+                else:
+                    # Count waiting as a move too (standard in MAPF)
+                    agent_cost += 1
+            sum_of_cost += agent_cost
+        
+        return makespan, sum_of_cost
     
-    # # Check if we can infer from plan length (if available in output)
-    # # This would require modifications to your driver code to output more info
-    # lines = stdout_content.split('\n')
-    # for line in lines:
-    #     if 'timestep' in line.lower() and 'reached' in line.lower():
-    #         return 'insufficient_time'
-    #     elif 'cycle' in line.lower() or 'loop' in line.lower():
-    #         return 'livelock'
-    
-    return 'unknown'
+    except Exception as e:
+        print(f"    ⚠️  Error parsing metrics from {output_file}: {e}")
+        return None, None
 
-def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=None, pibt_version="pibt_new"):
-    """Run a single experiment"""
-    
-    # Calculate max timestep if not provided
-    if max_timestep is None:
-        height, width = get_map_dimensions(map_file)
-        if height and width:
-            max_timestep = height * width * num_agents 
-            print(f"  Map dimensions: {height}x{width}, max timestep: {max_timestep}")
-        else:
-            max_timestep = 1000  # fallback
-            print(f"  Could not determine map size, using  fallback: {max_timestep}")
+def run_single_experiment(args):
+    """
+    Return (experiment_info, result_dict)
+    """
+    map_file, scen_file, num_agents, output_file, max_timestep, pibt_version, exp_id, total_exps = args
     
     cmd = [
         "python3", "app.py",
@@ -89,17 +118,23 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
         "--pibt-version", pibt_version
     ]
     
-    print(f"Running: {os.path.basename(map_file)} + {os.path.basename(scen_file)} (N={num_agents})")
+    map_name = os.path.basename(map_file).replace('.map', '')
+    scen_name = os.path.basename(scen_file).replace('.scen', '')
+    
+    print(f"[{exp_id}/{total_exps}] Starting: {map_name} + {scen_name} (N={num_agents}, {pibt_version})")
     start_time = time.time()
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 min timeout
         runtime = time.time() - start_time
-
+        
         solved = "solved: True" in result.stdout
         
-        if result.stderr:
-            print(f"    ⚠️  Warning: {result.stderr[:100]}")
+        # Parse metrics from output file
+        makespan = None
+        sum_of_cost = None
+        if solved and os.path.exists(output_file):
+            makespan, sum_of_cost = parse_output_metrics(output_file)
         
         # Save detailed output for failed cases
         if not solved:
@@ -111,22 +146,60 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
                 f.write(f"Runtime: {runtime:.2f}s\n")
                 f.write(f"\nSTDOUT:\n{result.stdout}\n")
                 f.write(f"\nSTDERR:\n{result.stderr}\n")
-            
-        return solved, runtime, max_timestep
         
+        status = "✅" if solved else "❌"
+        metrics_str = ""
+        if makespan is not None:
+            metrics_str = f", makespan={makespan}, soc={sum_of_cost}"
+        print(f"[{exp_id}/{total_exps}] {status} {pibt_version}: {map_name}/{scen_name} ({runtime:.2f}s{metrics_str})")
+        
+        return (map_file, scen_file, num_agents, pibt_version), {
+            'solved': solved,
+            'runtime': runtime,
+            'makespan': makespan,
+            'sum_of_cost': sum_of_cost,
+            'max_timestep': max_timestep,
+            'map': map_name,
+            'scenario': scen_name,
+            'agents': num_agents
+        }
+        
+    except subprocess.TimeoutExpired:
+        runtime = time.time() - start_time
+        print(f"[{exp_id}/{total_exps}] ⏱️  TIMEOUT: {map_name}/{scen_name} ({pibt_version})")
+        return (map_file, scen_file, num_agents, pibt_version), {
+            'solved': False,
+            'runtime': runtime,
+            'makespan': None,
+            'sum_of_cost': None,
+            'max_timestep': max_timestep,
+            'map': map_name,
+            'scenario': scen_name,
+            'agents': num_agents,
+            'timeout': True
+        }
     except Exception as e:
-        print(f"    ERROR: {e}")
-        return False, 0, max_timestep
+        print(f"[{exp_id}/{total_exps}] ❌ ERROR: {map_name}/{scen_name} ({pibt_version}): {e}")
+        return (map_file, scen_file, num_agents, pibt_version), {
+            'solved': False,
+            'runtime': 0,
+            'makespan': None,
+            'sum_of_cost': None,
+            'max_timestep': max_timestep,
+            'map': map_name,
+            'scenario': scen_name,
+            'agents': num_agents,
+            'error': str(e)
+        }
 
 def main():
-    # Create output directories
+    # output dir
     os.makedirs("batch_results", exist_ok=True)
     for version in PIBT_VERSIONS:
         os.makedirs(f"batch_results/{version}", exist_ok=True)
     
-    # Auto-generate experiments by scanning directories -> FILE
     experiments = []
-
+    
     # Add specific experiments
     experiments.append(("assets/small.map", "assets/small-random-1.scen", 2))
     experiments.append(("assets/pushmap.map", "assets/pushmap-random-1.scen", 5))
@@ -134,74 +207,81 @@ def main():
     # Find all maps
     for map_file in glob.glob("assets/*.map"):
         map_name = os.path.basename(map_file).replace('.map', '')
-        
-        # Find corresponding scenarios
         scen_pattern = f"assets/scen/{map_name}-random-*.scen"
         scen_files = glob.glob(scen_pattern)
         
         for scen_file in scen_files:
-            experiments.append((map_file, scen_file, 50))  
-
+            experiments.append((map_file, scen_file, 50))
+    
     print(f"\n{'='*80}")
-    print(f"PIBT VERSION COMPARISON BATCH RUNNER")
+    print(f"PARALLEL PIBT VERSION COMPARISON BATCH RUNNER")
     print(f"{'='*80}")
     print(f"Testing {len(PIBT_VERSIONS)} versions: {', '.join(PIBT_VERSIONS)}")
     print(f"Total experiments per version: {len(experiments)}")
     print(f"Total runs: {len(experiments) * len(PIBT_VERSIONS)}")
+    print(f"Parallel workers: {NUM_PARALLEL}")
     print(f"{'='*80}\n")
     
-    # If no experiments found, show debug info
     if len(experiments) == 0:
         print("⚠️  No experiments found! Debug info:")
         print(f"Maps found: {glob.glob('assets/*.map')}")
         print(f"Scenarios found: {glob.glob('assets/scen/*.scen')}")
         return
     
-    # Store results for comparison
-    all_results = defaultdict(list)  # version -> list of results
+    # Prepare all tasks
+    all_tasks = []
+    task_id = 1
+    total_tasks = len(experiments) * len(PIBT_VERSIONS)
     
-    # Run all experiments for each version
     for version in PIBT_VERSIONS:
-        print(f"\n{'='*80}")
-        print(f"TESTING VERSION: {version.upper()}")
-        print(f"{'='*80}\n")
-        
-        version_results = []
-        version_time = 0
-        
-        for i, (map_file, scen_file, num_agents) in enumerate(experiments, 1):
+        for map_file, scen_file, num_agents in experiments:
+            # Calculate max timestep
+            height, width = get_map_dimensions(map_file)
+            if height and width:
+                max_timestep = height * width * num_agents
+            else:
+                max_timestep = 1000
+            
             # Create output filename
             map_name = os.path.basename(map_file).replace('.map', '')
             scen_name = os.path.basename(scen_file).replace('.scen', '')
             output_file = f"batch_results/{version}/{map_name}_{scen_name}_N{num_agents}.txt"
             
-            print(f"[{i}/{len(experiments)}] {map_name} + {scen_name} (N={num_agents})")
-            
-            solved, runtime, max_timestep = run_experiment(
-                map_file, scen_file, num_agents, output_file, pibt_version=version
-            )
-            
-            status_emoji = "✅" if solved else "❌"
-            print(f"  {status_emoji} {version}: {'SOLVED' if solved else 'FAILED'} ({runtime:.2f}s)")
-            
-            version_results.append({
-                'map': map_name,
-                'scenario': scen_name,
-                'agents': num_agents,
-                'solved': solved,
-                'runtime': runtime,
-                'max_timestep': max_timestep
-            })
-            version_time += runtime
+            all_tasks.append((
+                map_file, scen_file, num_agents, output_file, 
+                max_timestep, version, task_id, total_tasks
+            ))
+            task_id += 1
+    
+    # Run experiments in parallel
+    print(f"🚀 Starting {total_tasks} experiments with {NUM_PARALLEL} parallel workers...\n")
+    start_time = time.time()
+    
+    results_dict = {}
+    
+    with ProcessPoolExecutor(max_workers=NUM_PARALLEL) as executor:
+        futures = {executor.submit(run_single_experiment, task): task for task in all_tasks}
         
-        all_results[version] = version_results
-        
-        # Print version summary
-        solved_count = sum(1 for r in version_results if r['solved'])
-        print(f"\n{version.upper()} Summary:")
-        print(f"  Solved: {solved_count}/{len(version_results)} ({solved_count/len(version_results)*100:.1f}%)")
-        print(f"  Total time: {version_time:.2f}s")
-        print(f"  Avg time: {version_time/len(version_results):.2f}s")
+        for future in as_completed(futures):
+            try:
+                key, result = future.result()
+                results_dict[key] = result
+            except Exception as e:
+                print(f"❌ Task failed with exception: {e}")
+    
+    total_time = time.time() - start_time
+    
+    print(f"\n{'='*80}")
+    print(f"✅ All experiments completed in {total_time:.2f}s")
+    print(f"{'='*80}\n")
+    
+    # Organize results by version
+    all_results = defaultdict(list)
+    for version in PIBT_VERSIONS:
+        for map_file, scen_file, num_agents in experiments:
+            key = (map_file, scen_file, num_agents, version)
+            if key in results_dict:
+                all_results[version].append(results_dict[key])
     
     # Generate comparison report
     print(f"\n{'='*80}")
@@ -210,19 +290,28 @@ def main():
     
     # Overall statistics
     print("Overall Statistics:")
-    print(f"{'Version':<15} {'Solved':<10} {'Success Rate':<15} {'Total Time':<12} {'Avg Time'}")
-    print("-" * 80)
+    print(f"{'Version':<15} {'Solved':<10} {'Rate':<8} {'Total Time':<12} {'Avg Time':<12} {'Avg Makespan':<15} {'Avg SOC'}")
+    print("-" * 100)
     
     for version in PIBT_VERSIONS:
         results = all_results[version]
         solved_count = sum(1 for r in results if r['solved'])
-        total_time = sum(r['runtime'] for r in results)
-        avg_time = total_time / len(results)
-        success_rate = solved_count / len(results) * 100
+        total_time_v = sum(r['runtime'] for r in results)
+        avg_time = total_time_v / len(results) if results else 0
+        success_rate = solved_count / len(results) * 100 if results else 0
         
-        print(f"{version:<15} {solved_count}/{len(results):<7} {success_rate:>6.1f}%{'':<8} {total_time:>8.2f}s    {avg_time:.2f}s")
+        # Calculate average makespan and sum of cost for solved instances
+        makespans = [r['makespan'] for r in results if r['solved'] and r['makespan'] is not None]
+        socs = [r['sum_of_cost'] for r in results if r['solved'] and r['sum_of_cost'] is not None]
+        
+        avg_makespan = sum(makespans) / len(makespans) if makespans else 0
+        avg_soc = sum(socs) / len(socs) if socs else 0
+        
+        print(f"{version:<15} {solved_count}/{len(results):<7} {success_rate:>5.1f}%  "
+              f"{total_time_v:>8.2f}s    {avg_time:>8.2f}s    "
+              f"{avg_makespan:>10.1f}      {avg_soc:>10.1f}")
     
-    # Detailed comparison for each experiment
+    # Detailed comparison
     print(f"\n{'='*80}")
     print("Detailed Per-Experiment Comparison:")
     print(f"{'='*80}\n")
@@ -242,25 +331,37 @@ def main():
         }
         
         for version in PIBT_VERSIONS:
-            result = all_results[version][i]
-            status = "✅ SOLVED" if result['solved'] else "❌ FAILED"
-            print(f"  {version:<12}: {status:<12} ({result['runtime']:.2f}s)")
+            key = (map_file, scen_file, num_agents, version)
+            result = results_dict.get(key, {})
             
-            exp_comparison[f'{version}_solved'] = result['solved']
-            exp_comparison[f'{version}_time'] = result['runtime']
+            status = "✅ SOLVED" if result.get('solved') else "❌ FAILED"
+            metrics = f"{result.get('runtime', 0):.2f}s"
+            if result.get('makespan'):
+                metrics += f", makespan={result['makespan']}, soc={result['sum_of_cost']}"
+            
+            print(f"  {version:<12}: {status:<12} ({metrics})")
+            
+            exp_comparison[f'{version}_solved'] = result.get('solved', False)
+            exp_comparison[f'{version}_time'] = result.get('runtime', 0)
+            exp_comparison[f'{version}_makespan'] = result.get('makespan')
+            exp_comparison[f'{version}_soc'] = result.get('sum_of_cost')
         
         # Highlight differences
-        solved_versions = [v for v in PIBT_VERSIONS if all_results[v][i]['solved']]
-        failed_versions = [v for v in PIBT_VERSIONS if not all_results[v][i]['solved']]
+        solved_versions = [v for v in PIBT_VERSIONS if results_dict.get((map_file, scen_file, num_agents, v), {}).get('solved')]
+        failed_versions = [v for v in PIBT_VERSIONS if not results_dict.get((map_file, scen_file, num_agents, v), {}).get('solved')]
         
         if solved_versions and failed_versions:
             print(f"  ⚠️  Different results: {', '.join(solved_versions)} solved, {', '.join(failed_versions)} failed")
-        elif solved_versions:
-            times = [all_results[v][i]['runtime'] for v in PIBT_VERSIONS]
-            fastest = PIBT_VERSIONS[times.index(min(times))]
-            slowest = PIBT_VERSIONS[times.index(max(times))]
-            if max(times) > min(times) * 1.2:  # 20% difference
-                print(f"  🏃 {fastest} was fastest ({min(times):.2f}s), {slowest} was slowest ({max(times):.2f}s)")
+        elif len(solved_versions) == len(PIBT_VERSIONS):
+            # Compare quality metrics
+            makespans = {v: results_dict.get((map_file, scen_file, num_agents, v), {}).get('makespan') for v in PIBT_VERSIONS}
+            socs = {v: results_dict.get((map_file, scen_file, num_agents, v), {}).get('sum_of_cost') for v in PIBT_VERSIONS}
+            
+            if all(makespans.values()):
+                best_makespan = min(makespans.values())
+                best_version = [v for v, m in makespans.items() if m == best_makespan][0]
+                if max(makespans.values()) > best_makespan:
+                    print(f"  🏆 {best_version} has best makespan ({best_makespan})")
         
         comparison_data.append(exp_comparison)
         print()
@@ -271,22 +372,31 @@ def main():
         f.write("="*80 + "\n\n")
         
         f.write(f"Versions tested: {', '.join(PIBT_VERSIONS)}\n")
-        f.write(f"Total experiments: {len(experiments)}\n\n")
+        f.write(f"Total experiments: {len(experiments)}\n")
+        f.write(f"Parallel workers: {NUM_PARALLEL}\n")
+        f.write(f"Total time: {total_time:.2f}s\n\n")
         
         f.write("Overall Statistics:\n")
-        f.write("-" * 80 + "\n")
-        f.write(f"{'Version':<15} {'Solved':<15} {'Success Rate':<15} {'Total Time':<15} {'Avg Time'}\n")
-        f.write("-" * 80 + "\n")
+        f.write("-" * 100 + "\n")
+        f.write(f"{'Version':<15} {'Solved':<15} {'Rate':<10} {'Total Time':<15} {'Avg Time':<15} {'Avg Makespan':<15} {'Avg SOC'}\n")
+        f.write("-" * 100 + "\n")
         
         for version in PIBT_VERSIONS:
             results = all_results[version]
             solved_count = sum(1 for r in results if r['solved'])
-            total_time = sum(r['runtime'] for r in results)
-            avg_time = total_time / len(results)
-            success_rate = solved_count / len(results) * 100
+            total_time_v = sum(r['runtime'] for r in results)
+            avg_time = total_time_v / len(results) if results else 0
+            success_rate = solved_count / len(results) * 100 if results else 0
             
-            f.write(f"{version:<15} {solved_count}/{len(results):<12} "
-                   f"{success_rate:.1f}%{'':<11} {total_time:.2f}s{'':<10} {avg_time:.2f}s\n")
+            makespans = [r['makespan'] for r in results if r['solved'] and r['makespan'] is not None]
+            socs = [r['sum_of_cost'] for r in results if r['solved'] and r['sum_of_cost'] is not None]
+            
+            avg_makespan = sum(makespans) / len(makespans) if makespans else 0
+            avg_soc = sum(socs) / len(socs) if socs else 0
+            
+            f.write(f"{version:<15} {solved_count}/{len(results):<12} {success_rate:.1f}%{'':<6} "
+                   f"{total_time_v:.2f}s{'':<10} {avg_time:.2f}s{'':<10} "
+                   f"{avg_makespan:.1f}{'':<10} {avg_soc:.1f}\n")
         
         f.write("\n" + "="*80 + "\n")
         f.write("Detailed Per-Experiment Results:\n")
@@ -296,7 +406,10 @@ def main():
             f.write(f"{exp['map']} + {exp['scenario']} (N={exp['agents']}):\n")
             for version in PIBT_VERSIONS:
                 status = "SOLVED" if exp[f'{version}_solved'] else "FAILED"
-                f.write(f"  {version:<12}: {status:<8} ({exp[f'{version}_time']:.2f}s)\n")
+                metrics = f"{exp[f'{version}_time']:.2f}s"
+                if exp[f'{version}_makespan']:
+                    metrics += f", makespan={exp[f'{version}_makespan']}, soc={exp[f'{version}_soc']}"
+                f.write(f"  {version:<12}: {status:<8} ({metrics})\n")
             f.write("\n")
     
     print(f"\n{'='*80}")
