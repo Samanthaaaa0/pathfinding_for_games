@@ -14,9 +14,6 @@ mapf-visualizer ./assets/small.map ./output.txt
 poetry run python app.py -m assets/maze-128-128-1.map -i assets/scen/maze-128-128-1-random-1.scen -N 200
 mapf-visualizer ./assets/maze-128-128-1.map ./output.txt
 
-poetry run python3 app.py -m assets/livelock.map -i assets/livelock.scen -N 7
-mapf-visualizer ./assets/livelock.map ./output.txt
-\
 todo:
 poetry run python3 app.py -m assets/corswap.map -i assets/corswap.scen -N 10
 mapf-visualizer ./assets/corswap.map ./output.txt

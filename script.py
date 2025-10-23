@@ -80,7 +80,7 @@ def run_experiment(map_file, scen_file, num_agents, output_file, max_timestep=No
             print(f"  Could not determine map size, using fallback: {max_timestep}")
     
     cmd = [
-        "poetry", "run", "python", "app.py",
+        "python", "app.py",
         "-m", map_file,
         "-i", scen_file,
         "-N", str(num_agents),
