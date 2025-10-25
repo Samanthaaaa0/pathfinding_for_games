@@ -224,10 +224,12 @@ def main():
                 # Print result
                 completed += 1
                 status = "✅" if solved else "❌"
-                percent = (completed / total_tasks) * 100
                 metrics_str = f", makespan={makespan}, soc={sum_of_cost}" if makespan else ""
-                print(f"[{completed}/{total_tasks}] ({percent:.1f}%) {status} {task['version']}: "
-                      f"{task['map_name']}/{task['scen_name']} ({runtime:.2f}s{metrics_str})")
+                # print(status, end=' ')
+
+                # print(f"[{completed}/{total_tasks}] {status} {task['version']}: "
+                #       f"{task['map_name']}/{task['scen_name']} ({runtime:.2f}s{metrics_str})")
+            
                 
                 # Remove from pool
                 processPool.pop(i)
