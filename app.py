@@ -53,7 +53,7 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=1000)
+    parser.add_argument("--max-timestep", type=int, default=50)
 
     parser.add_argument(
         "--pibt-version",
@@ -76,8 +76,6 @@ if __name__ == "__main__":
         from pibt.pibt_new import PIBT
     elif args.pibt_version == "oriori":
         from pibt.oriori import PIBT
-    elif args.pibt_version == "oripibt":
-        from pibt.oripibt import PIBT
 
     print(f"Using PIBT version: {args.pibt_version}")
 
