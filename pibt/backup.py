@@ -86,30 +86,6 @@ class PIBT:
 
         for v in candidate:
 
-            # if i == root_agent and v == i_from[i] and i != self.goals[i]:
-            #     # ensure wait count tracking
-            #     if not hasattr(self, "root_wait_count"):
-            #         self.root_wait_count = {}
-            #     if i not in self.root_wait_count:
-            #         self.root_wait_count[i] = 0
-
-            #     if potential_swap_candidates:
-            #         # If already waited enough → don't allow staying in place
-            #         if self.root_wait_count[i] >= self.max_root_wait:
-            #             break
-            #         else:
-            #             # Allow bounded waiting
-            #             self.root_wait_count[i] += 1
-
-            #     else:
-            #     # If no swap candidates exist, allow staying as fallback
-            #     # (root_wait_count still increments so it won’t stay forever)
-            #         if self.root_wait_count[i] >= self.max_root_wait:
-            #             break
-            #         else:
-            #             # Allow bounded waiting
-            #             self.root_wait_count[i] += 1
-
             j = self.occupied_now[v]
 
             # Check for vertex conflict - exclude nodes that are already requested by others

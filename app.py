@@ -3,18 +3,6 @@
 import argparse
 import os
 
-from pibt.pibt_new import (
-    PIBT
-)
-
-# from pibt.oriori import (
-#     PIBT
-# )
-
-# from pibt.oripibt import (
-#     PIBT
-# )
-
 from pibt.utils import (
     parse_map, 
     get_scenario, 
@@ -53,12 +41,12 @@ if __name__ == "__main__":
         default="output.txt",
     )
     parser.add_argument("-s", "--seed", type=int, default=0)
-    parser.add_argument("--max-timestep", type=int, default=50)
+    parser.add_argument("--max-timestep", type=int, default=10000)
 
     parser.add_argument(
         "--pibt-version",
         type=str,
-        choices=["pibt_new", "oriori", "oripibt"],
+        choices=["pibt_new", "oriori", "backup"],
         default="pibt_new",
         help="Select which PIBT implementation to use"
     )
@@ -76,6 +64,8 @@ if __name__ == "__main__":
         from pibt.pibt_new import PIBT
     elif args.pibt_version == "oriori":
         from pibt.oriori import PIBT
+    elif args.pibt_version == "backup":
+        from pibt.backup import PIBT
 
     print(f"Using PIBT version: {args.pibt_version}")
 
