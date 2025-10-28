@@ -1,0 +1,54 @@
+================================================================================
+Map: random-64-64-20 | Agents: 50 | Scenarios: 50
+================================================================================
+
+  ✅ random-64-64-20-random-1                 SOLVED       runtime=0.43s, makespan=91, soc=4500
+  ✅ random-64-64-20-random-25                SOLVED       runtime=0.44s, makespan=85, soc=4200
+  ✅ random-64-64-20-random-23                SOLVED       runtime=0.43s, makespan=95, soc=4700
+  ✅ random-64-64-20-random-2                 SOLVED       runtime=0.43s, makespan=87, soc=4300
+  ✅ random-64-64-20-random-7                 SOLVED       runtime=0.43s, makespan=95, soc=4700
+  ✅ random-64-64-20-random-9                 SOLVED       runtime=0.43s, makespan=82, soc=4050
+  ✅ random-64-64-20-random-22                SOLVED       runtime=0.54s, makespan=80, soc=3950
+  ✅ random-64-64-20-random-8                 SOLVED       runtime=0.43s, makespan=83, soc=4100
+  ✅ random-64-64-20-random-13                SOLVED       runtime=0.44s, makespan=91, soc=4500
+  ✅ random-64-64-20-random-14                SOLVED       runtime=0.43s, makespan=94, soc=4650
+  ✅ random-64-64-20-random-20                SOLVED       runtime=0.43s, makespan=83, soc=4100
+  ✅ random-64-64-20-random-6                 SOLVED       runtime=0.44s, makespan=114, soc=5650
+  ✅ random-64-64-20-random-18                SOLVED       runtime=0.45s, makespan=102, soc=5050
+  ✅ random-64-64-20-random-17                SOLVED       runtime=0.44s, makespan=88, soc=4350
+  ✅ random-64-64-20-random-11                SOLVED       runtime=0.44s, makespan=94, soc=4650
+  ✅ random-64-64-20-random-19                SOLVED       runtime=0.44s, makespan=84, soc=4150
+  ✅ random-64-64-20-random-3                 SOLVED       runtime=0.45s, makespan=83, soc=4100
+  ✅ random-64-64-20-random-15                SOLVED       runtime=0.44s, makespan=99, soc=4900
+  ✅ random-64-64-20-random-12                SOLVED       runtime=0.44s, makespan=90, soc=4450
+  ✅ random-64-64-20-random-10                SOLVED       runtime=0.45s, makespan=89, soc=4400
+  ✅ random-64-64-20-random-16                SOLVED       runtime=0.45s, makespan=98, soc=4850
+  ✅ random-64-64-20-random-21                SOLVED       runtime=0.45s, makespan=87, soc=4300
+  ✅ random-64-64-20-random-24                SOLVED       runtime=0.45s, makespan=98, soc=4850
+  ✅ random-64-64-20-random-4                 SOLVED       runtime=0.47s, makespan=97, soc=4800
+  ✅ random-64-64-20-random-5                 SOLVED       runtime=0.46s, makespan=96, soc=4750
+  ✅ random-64-64-20-even-16                  SOLVED       runtime=0.46s, makespan=96, soc=4750
+  ✅ random-64-64-20-even-5                   SOLVED       runtime=0.46s, makespan=110, soc=5450
+  ✅ random-64-64-20-even-3                   SOLVED       runtime=0.47s, makespan=107, soc=5300
+  ✅ random-64-64-20-even-17                  SOLVED       runtime=0.46s, makespan=99, soc=4900
+  ✅ random-64-64-20-even-25                  SOLVED       runtime=0.46s, makespan=101, soc=5000
+  ✅ random-64-64-20-even-8                   SOLVED       runtime=0.46s, makespan=102, soc=5050
+  ✅ random-64-64-20-even-12                  SOLVED       runtime=0.46s, makespan=118, soc=5850
+  ✅ random-64-64-20-even-11                  SOLVED       runtime=0.47s, makespan=113, soc=5600
+  ✅ random-64-64-20-even-24                  SOLVED       runtime=0.47s, makespan=140, soc=6950
+  ✅ random-64-64-20-even-1                   SOLVED       runtime=0.47s, makespan=107, soc=5300
+  ✅ random-64-64-20-even-20                  SOLVED       runtime=0.47s, makespan=100, soc=4950
+  ✅ random-64-64-20-even-15                  SOLVED       runtime=0.47s, makespan=104, soc=5150
+  ✅ random-64-64-20-even-4                   SOLVED       runtime=0.47s, makespan=106, soc=5250
+  ✅ random-64-64-20-even-14                  SOLVED       runtime=0.46s, makespan=105, soc=5200
+  ✅ random-64-64-20-even-19                  SOLVED       runtime=0.47s, makespan=100, soc=4950
+  ✅ random-64-64-20-even-10                  SOLVED       runtime=0.48s, makespan=116, soc=5750
+  ✅ random-64-64-20-even-2                   SOLVED       runtime=0.48s, makespan=113, soc=5600
+  ✅ random-64-64-20-even-18                  SOLVED       runtime=0.47s, makespan=104, soc=5150
+  ✅ random-64-64-20-even-7                   SOLVED       runtime=0.47s, makespan=106, soc=5250
+  ✅ random-64-64-20-even-13                  SOLVED       runtime=0.48s, makespan=118, soc=5850
+  ✅ random-64-64-20-even-23                  SOLVED       runtime=0.48s, makespan=105, soc=5200
+  ✅ random-64-64-20-even-9                   SOLVED       runtime=0.48s, makespan=110, soc=5450
+  ✅ random-64-64-20-even-6                   SOLVED       runtime=0.48s, makespan=107, soc=5300
+  ✅ random-64-64-20-even-22                  SOLVED       runtime=0.48s, makespan=111, soc=5500
+  ✅ random-64-64-20-even-21                  SOLVED       runtime=0.47s, makespan=108, soc=5350

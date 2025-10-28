@@ -1,0 +1,29 @@
+================================================================================
+Map: maze-128-128-1 | Agents: 50 | Scenarios: 25
+================================================================================
+
+  ⏱️ maze-128-128-1-random-5                  TIMEOUT      runtime=300.07s
+  ✅ maze-128-128-1-random-3                  SOLVED       runtime=1.20s, makespan=920, soc=45950
+  ⏱️ maze-128-128-1-random-18                 TIMEOUT      runtime=300.07s
+  ⏱️ maze-128-128-1-random-7                  TIMEOUT      runtime=300.03s
+  ✅ maze-128-128-1-random-24                 SOLVED       runtime=1.35s, makespan=1129, soc=56400
+  ⏱️ maze-128-128-1-random-8                  TIMEOUT      runtime=300.09s
+  ⏱️ maze-128-128-1-random-25                 TIMEOUT      runtime=300.06s
+  ✅ maze-128-128-1-random-14                 SOLVED       runtime=1.29s, makespan=1070, soc=53450
+  ⏱️ maze-128-128-1-random-6                  TIMEOUT      runtime=300.11s
+  ✅ maze-128-128-1-random-15                 SOLVED       runtime=1.29s, makespan=1127, soc=56300
+  ⏱️ maze-128-128-1-random-20                 TIMEOUT      runtime=300.10s
+  ⏱️ maze-128-128-1-random-13                 TIMEOUT      runtime=300.09s
+  ✅ maze-128-128-1-random-23                 SOLVED       runtime=1.30s, makespan=1039, soc=51900
+  ⏱️ maze-128-128-1-random-17                 TIMEOUT      runtime=300.05s
+  ⏱️ maze-128-128-1-random-2                  TIMEOUT      runtime=300.18s
+  ✅ maze-128-128-1-random-1                  SOLVED       runtime=1.52s, makespan=1186, soc=59250
+  ⏱️ maze-128-128-1-random-21                 TIMEOUT      runtime=300.05s
+  ✅ maze-128-128-1-random-4                  SOLVED       runtime=1.34s, makespan=1094, soc=54650
+  ⏱️ maze-128-128-1-random-12                 TIMEOUT      runtime=300.07s
+  ✅ maze-128-128-1-random-16                 SOLVED       runtime=1.19s, makespan=961, soc=48000
+  ⏱️ maze-128-128-1-random-10                 TIMEOUT      runtime=300.09s
+  ⏱️ maze-128-128-1-random-22                 TIMEOUT      runtime=300.01s
+  ⏱️ maze-128-128-1-random-19                 TIMEOUT      runtime=300.05s
+  ⏱️ maze-128-128-1-random-11                 TIMEOUT      runtime=300.03s
+  ⏱️ maze-128-128-1-random-9                  TIMEOUT      runtime=300.09s

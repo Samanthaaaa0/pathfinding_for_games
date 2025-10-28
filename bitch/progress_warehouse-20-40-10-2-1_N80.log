@@ -1,0 +1,54 @@
+================================================================================
+Map: warehouse-20-40-10-2-1 | Agents: 80 | Scenarios: 50
+================================================================================
+
+  ✅ warehouse-20-40-10-2-1-random-21         SOLVED       runtime=2.70s, makespan=328, soc=26160
+  ✅ warehouse-20-40-10-2-1-random-10         SOLVED       runtime=3.06s, makespan=378, soc=30160
+  ✅ warehouse-20-40-10-2-1-random-9          SOLVED       runtime=2.95s, makespan=362, soc=28880
+  ✅ warehouse-20-40-10-2-1-random-13         SOLVED       runtime=2.84s, makespan=351, soc=28000
+  ✅ warehouse-20-40-10-2-1-random-19         SOLVED       runtime=2.97s, makespan=401, soc=32000
+  ✅ warehouse-20-40-10-2-1-random-1          SOLVED       runtime=2.80s, makespan=367, soc=29280
+  ✅ warehouse-20-40-10-2-1-random-5          SOLVED       runtime=2.93s, makespan=378, soc=30160
+  ✅ warehouse-20-40-10-2-1-random-3          SOLVED       runtime=3.06s, makespan=388, soc=30960
+  ✅ warehouse-20-40-10-2-1-random-15         SOLVED       runtime=2.86s, makespan=377, soc=30080
+  ✅ warehouse-20-40-10-2-1-random-24         SOLVED       runtime=2.78s, makespan=343, soc=27360
+  ✅ warehouse-20-40-10-2-1-random-23         SOLVED       runtime=2.83s, makespan=356, soc=28400
+  ✅ warehouse-20-40-10-2-1-random-20         SOLVED       runtime=2.91s, makespan=344, soc=27440
+  ✅ warehouse-20-40-10-2-1-random-25         SOLVED       runtime=3.04s, makespan=370, soc=29520
+  ✅ warehouse-20-40-10-2-1-random-7          SOLVED       runtime=2.94s, makespan=374, soc=29840
+  ✅ warehouse-20-40-10-2-1-random-2          SOLVED       runtime=2.79s, makespan=366, soc=29200
+  ✅ warehouse-20-40-10-2-1-random-6          SOLVED       runtime=2.88s, makespan=372, soc=29680
+  ✅ warehouse-20-40-10-2-1-random-18         SOLVED       runtime=2.63s, makespan=337, soc=26880
+  ✅ warehouse-20-40-10-2-1-random-17         SOLVED       runtime=2.84s, makespan=344, soc=27440
+  ✅ warehouse-20-40-10-2-1-random-11         SOLVED       runtime=2.91s, makespan=378, soc=30160
+  ✅ warehouse-20-40-10-2-1-random-22         SOLVED       runtime=2.81s, makespan=369, soc=29440
+  ✅ warehouse-20-40-10-2-1-random-14         SOLVED       runtime=3.01s, makespan=349, soc=27840
+  ⏱️ warehouse-20-40-10-2-1-random-4          TIMEOUT      runtime=300.06s
+  ⏱️ warehouse-20-40-10-2-1-random-12         TIMEOUT      runtime=300.24s
+  ⏱️ warehouse-20-40-10-2-1-random-8          TIMEOUT      runtime=300.12s
+  ✅ warehouse-20-40-10-2-1-even-1            SOLVED       runtime=3.44s, makespan=395, soc=31520
+  ✅ warehouse-20-40-10-2-1-even-2            SOLVED       runtime=3.31s, makespan=395, soc=31520
+  ✅ warehouse-20-40-10-2-1-even-24           SOLVED       runtime=3.13s, makespan=422, soc=33680
+  ✅ warehouse-20-40-10-2-1-even-3            SOLVED       runtime=3.23s, makespan=393, soc=31360
+  ✅ warehouse-20-40-10-2-1-even-20           SOLVED       runtime=3.25s, makespan=416, soc=33200
+  ✅ warehouse-20-40-10-2-1-even-9            SOLVED       runtime=3.15s, makespan=425, soc=33920
+  ✅ warehouse-20-40-10-2-1-even-18           SOLVED       runtime=3.42s, makespan=411, soc=32800
+  ✅ warehouse-20-40-10-2-1-even-22           SOLVED       runtime=3.14s, makespan=408, soc=32560
+  ✅ warehouse-20-40-10-2-1-even-10           SOLVED       runtime=3.25s, makespan=407, soc=32480
+  ⏱️ warehouse-20-40-10-2-1-random-16         TIMEOUT      runtime=300.02s
+  ⏱️ warehouse-20-40-10-2-1-even-4            TIMEOUT      runtime=300.06s
+  ✅ warehouse-20-40-10-2-1-even-13           SOLVED       runtime=3.19s, makespan=409, soc=32640
+  ✅ warehouse-20-40-10-2-1-even-6            SOLVED       runtime=2.97s, makespan=385, soc=30720
+  ✅ warehouse-20-40-10-2-1-even-15           SOLVED       runtime=3.29s, makespan=401, soc=32000
+  ✅ warehouse-20-40-10-2-1-even-17           SOLVED       runtime=3.30s, makespan=388, soc=30960
+  ✅ warehouse-20-40-10-2-1-even-21           SOLVED       runtime=3.10s, makespan=413, soc=32960
+  ✅ warehouse-20-40-10-2-1-even-19           SOLVED       runtime=3.35s, makespan=417, soc=33280
+  ⏱️ warehouse-20-40-10-2-1-even-12           TIMEOUT      runtime=300.06s
+  ✅ warehouse-20-40-10-2-1-even-8            SOLVED       runtime=3.01s, makespan=403, soc=32160
+  ✅ warehouse-20-40-10-2-1-even-25           SOLVED       runtime=3.28s, makespan=418, soc=33360
+  ✅ warehouse-20-40-10-2-1-even-7            SOLVED       runtime=2.98s, makespan=409, soc=32640
+  ⏱️ warehouse-20-40-10-2-1-even-23           TIMEOUT      runtime=300.01s
+  ⏱️ warehouse-20-40-10-2-1-even-11           TIMEOUT      runtime=300.10s
+  ⏱️ warehouse-20-40-10-2-1-even-16           TIMEOUT      runtime=300.07s
+  ⏱️ warehouse-20-40-10-2-1-even-14           TIMEOUT      runtime=300.12s
+  ⏱️ warehouse-20-40-10-2-1-even-5            TIMEOUT      runtime=300.01s

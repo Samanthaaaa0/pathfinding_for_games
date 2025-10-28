@@ -1,0 +1,54 @@
+================================================================================
+Map: brc202d | Agents: 60 | Scenarios: 50
+================================================================================
+
+  ✅ brc202d-random-22                        SOLVED       runtime=4.47s, makespan=889, soc=53280
+  ✅ brc202d-random-4                         SOLVED       runtime=4.39s, makespan=832, soc=49860
+  ✅ brc202d-random-11                        SOLVED       runtime=4.47s, makespan=999, soc=59880
+  ✅ brc202d-random-8                         SOLVED       runtime=4.53s, makespan=974, soc=58380
+  ✅ brc202d-random-14                        SOLVED       runtime=4.70s, makespan=1044, soc=62580
+  ✅ brc202d-random-19                        SOLVED       runtime=5.08s, makespan=1025, soc=61440
+  ✅ brc202d-random-25                        SOLVED       runtime=5.03s, makespan=987, soc=59160
+  ✅ brc202d-random-17                        SOLVED       runtime=4.21s, makespan=940, soc=56340
+  ✅ brc202d-random-18                        SOLVED       runtime=4.98s, makespan=1122, soc=67260
+  ✅ brc202d-random-3                         SOLVED       runtime=4.32s, makespan=922, soc=55260
+  ✅ brc202d-random-7                         SOLVED       runtime=4.95s, makespan=965, soc=57840
+  ✅ brc202d-random-20                        SOLVED       runtime=4.72s, makespan=1069, soc=64080
+  ✅ brc202d-random-5                         SOLVED       runtime=4.21s, makespan=1019, soc=61080
+  ✅ brc202d-random-2                         SOLVED       runtime=4.37s, makespan=869, soc=52080
+  ✅ brc202d-random-13                        SOLVED       runtime=4.53s, makespan=1014, soc=60780
+  ✅ brc202d-random-12                        SOLVED       runtime=4.35s, makespan=1001, soc=60000
+  ✅ brc202d-random-9                         SOLVED       runtime=4.45s, makespan=990, soc=59340
+  ✅ brc202d-random-21                        SOLVED       runtime=4.56s, makespan=956, soc=57300
+  ✅ brc202d-random-1                         SOLVED       runtime=4.74s, makespan=925, soc=55440
+  ✅ brc202d-random-15                        SOLVED       runtime=4.54s, makespan=1028, soc=61620
+  ✅ brc202d-random-10                        SOLVED       runtime=4.38s, makespan=927, soc=55560
+  ✅ brc202d-random-6                         SOLVED       runtime=4.79s, makespan=1004, soc=60180
+  ✅ brc202d-random-24                        SOLVED       runtime=4.74s, makespan=1021, soc=61200
+  ✅ brc202d-random-23                        SOLVED       runtime=4.42s, makespan=958, soc=57420
+  ✅ brc202d-random-16                        SOLVED       runtime=4.56s, makespan=834, soc=49980
+  ✅ brc202d-even-11                          SOLVED       runtime=5.50s, makespan=1082, soc=64860
+  ✅ brc202d-even-10                          SOLVED       runtime=5.99s, makespan=1096, soc=65700
+  ✅ brc202d-even-5                           SOLVED       runtime=5.34s, makespan=1081, soc=64800
+  ✅ brc202d-even-24                          SOLVED       runtime=5.14s, makespan=1026, soc=61500
+  ✅ brc202d-even-20                          SOLVED       runtime=5.76s, makespan=1074, soc=64380
+  ✅ brc202d-even-7                           SOLVED       runtime=5.26s, makespan=1024, soc=61380
+  ✅ brc202d-even-9                           SOLVED       runtime=5.40s, makespan=1063, soc=63720
+  ✅ brc202d-even-3                           SOLVED       runtime=4.88s, makespan=1025, soc=61440
+  ✅ brc202d-even-17                          SOLVED       runtime=5.57s, makespan=1051, soc=63000
+  ✅ brc202d-even-22                          SOLVED       runtime=5.31s, makespan=1072, soc=64260
+  ✅ brc202d-even-12                          SOLVED       runtime=5.73s, makespan=1076, soc=64500
+  ✅ brc202d-even-15                          SOLVED       runtime=5.62s, makespan=1053, soc=63120
+  ✅ brc202d-even-16                          SOLVED       runtime=5.47s, makespan=1057, soc=63360
+  ✅ brc202d-even-25                          SOLVED       runtime=5.33s, makespan=1057, soc=63360
+  ✅ brc202d-even-23                          SOLVED       runtime=5.42s, makespan=1014, soc=60780
+  ✅ brc202d-even-8                           SOLVED       runtime=5.75s, makespan=1053, soc=63120
+  ✅ brc202d-even-19                          SOLVED       runtime=4.93s, makespan=1029, soc=61680
+  ✅ brc202d-even-14                          SOLVED       runtime=4.96s, makespan=981, soc=58800
+  ✅ brc202d-even-21                          SOLVED       runtime=5.57s, makespan=1057, soc=63360
+  ✅ brc202d-even-4                           SOLVED       runtime=5.29s, makespan=1087, soc=65160
+  ✅ brc202d-even-6                           SOLVED       runtime=5.57s, makespan=1026, soc=61500
+  ✅ brc202d-even-2                           SOLVED       runtime=5.43s, makespan=1027, soc=61560
+  ✅ brc202d-even-13                          SOLVED       runtime=5.34s, makespan=989, soc=59280
+  ✅ brc202d-even-18                          SOLVED       runtime=5.46s, makespan=1058, soc=63420
+  ✅ brc202d-even-1                           SOLVED       runtime=5.33s, makespan=1065, soc=63840

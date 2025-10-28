@@ -14,7 +14,7 @@ import re
 import json
 
 # Configuration
-PIBT_VERSIONS = ["pibt_new"]  
+PIBT_VERSIONS = ["oriori"]  
 NUM_PARALLEL = int(sys.argv[1]) if len(sys.argv) > 1 else 40
 
 # Adaptive timeout configuration
@@ -168,41 +168,43 @@ def main():
     map_count = 0
     
     # Special small test cases
-    if os.path.exists("assets/small.map"):
-        experiments.append(("assets/small.map", "assets/small-random-1.scen", 2))
-        map_count += 1
+    # if os.path.exists("assets/small.map"):
+    #     experiments.append(("assets/small.map", "assets/small-random-1.scen", 2))
+    #     map_count += 1
     if os.path.exists("assets/pushmap.map"):
         experiments.append(("assets/pushmap.map", "assets/pushmap-random-1.scen", 5))
         map_count += 1
     
     # Find all maps and generate experiments with agent ranges
-    for map_file in glob.glob("assets/*.map"):
-        map_name = os.path.basename(map_file).replace('.map', '')
-        scen_pattern = f"assets/scen/{map_name}-random-*.scen"
-        scen_files = glob.glob(scen_pattern)
+    # for map_file in glob.glob("assets/warehouse-20-40-10-2-1.map"):
+    map_file = "assets/warehouse-10-20-10-2-1.map"
 
-        scen_pattern_even = f"assets/scen/{map_name}-even-*.scen"
-        scen_files += glob.glob(scen_pattern_even)
+    map_name = os.path.basename(map_file).replace('.map', '')
+    scen_pattern = f"assets/scen/warehouse-10-20-10-2-1-random-*.scen"
+    scen_files = glob.glob(scen_pattern)
+
+    scen_pattern_even = f"assets/scen/warehouse-10-20-10-2-1-even-*.scen"
+    scen_files += glob.glob(scen_pattern_even)
+    
+    # if not scen_files:
+    #     continue
+    
+    # Get map dimensions
+    height, width = get_map_dimensions(map_file)
+    
+    # Calculate sample timeouts for display
+    sample_timeout_50 = calculate_adaptive_timeout(50, width, height) if height and width else 0
+    sample_timeout_100 = calculate_adaptive_timeout(100, width, height) if height and width else 0
+    
+    print(f"Map {map_name} ({width}×{height}, area={width*height}): {len(scen_files)} scenarios, "
+            f"agents: {list(AGENT_RANGE)}, "
+            f"timeout@50: {sample_timeout_50}s, @100: {sample_timeout_100}s")
+    
+    for scen_file in scen_files:
+        for num_agents in AGENT_RANGE:
+            experiments.append((map_file, scen_file, num_agents))
         
-        if not scen_files:
-            continue
-        
-        # Get map dimensions
-        height, width = get_map_dimensions(map_file)
-        
-        # Calculate sample timeouts for display
-        sample_timeout_50 = calculate_adaptive_timeout(50, width, height) if height and width else 0
-        sample_timeout_100 = calculate_adaptive_timeout(100, width, height) if height and width else 0
-        
-        print(f"Map {map_name} ({width}×{height}, area={width*height}): {len(scen_files)} scenarios, "
-              f"agents: {list(AGENT_RANGE)}, "
-              f"timeout@50: {sample_timeout_50}s, @100: {sample_timeout_100}s")
-        
-        for scen_file in scen_files:
-            for num_agents in AGENT_RANGE:
-                experiments.append((map_file, scen_file, num_agents))
-        
-        map_count += 1
+        # map_count += 1
     
     print(f"\n{'='*80}")
     print(f"🚀 PARALLEL BATCH RUNNER WITH ADAPTIVE TIMEOUT")

@@ -1,5 +1,3 @@
-# cited from
-
 import argparse
 import os
 
@@ -46,9 +44,28 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pibt-version",
         type=str,
-        choices=["pibt_new", "oriori", "backup"],
+        choices=["pibt_new", "oriori", "backup", "lacam"],
         default="pibt_new",
         help="Select which PIBT implementation to use"
+    )
+
+    # LaCAM-specific arguments
+    parser.add_argument(
+        "--time-limit-ms",
+        type=int,
+        default=10000,
+        help="Time limit in milliseconds for LaCAM solver"
+    )
+    parser.add_argument(
+        "--flg-star",
+        action="store_true",
+        help="Use LaCAM* variant"
+    )
+    parser.add_argument(
+        "--verbose",
+        type=int,
+        default=0,
+        help="Verbosity level for LaCAM"
     )
 
     parser.add_argument("--grid", dest="show_grid", action="store_true",
@@ -60,25 +77,53 @@ if __name__ == "__main__":
     parser.add_argument("--plan", type=str, help="Path to the planned path file")
     args = parser.parse_args()
 
-    if args.pibt_version == "pibt_new":
-        from pibt.pibt_new import PIBT
-    elif args.pibt_version == "oriori":
-        from pibt.oriori import PIBT
-    elif args.pibt_version == "backup":
-        from pibt.backup import PIBT
+    if args.pibt_version in ["pibt_new", "oriori", "backup"]:
 
-    print(f"Using PIBT version: {args.pibt_version}")
+        if args.pibt_version == "pibt_new":
+            from pibt.pibt_new import PIBT
+        elif args.pibt_version == "oriori":
+            from pibt.oriori import PIBT
+        elif args.pibt_version == "backup":
+            from pibt.backup import PIBT
 
-    # define problem instance
-    grid = parse_map(args.map_file)
-    starts, goals = get_scenario(args.scen_file, args.num_agents)
+        print(f"Using PIBT version: {args.pibt_version}")
 
-    # solve MAPF
-    pibt = PIBT(grid, starts, goals, seed=args.seed)
-    plan = pibt.run(max_timestep=args.max_timestep)
+        # define problem instance
+        grid = parse_map(args.map_file)
+        starts, goals = get_scenario(args.scen_file, args.num_agents)
 
-    # validation: True -> feasible solution
-    print(f"solved: {is_valid_mapf_solution(grid, starts, goals, plan)}")
+        # solve MAPF
+        pibt = PIBT(grid, starts, goals, seed=args.seed)
+        plan = pibt.run(max_timestep=args.max_timestep)
 
-    # save result
-    save_configs_for_visualizer(plan, args.output_file)
+        # validation: True -> feasible solution
+        print(f"solved: {is_valid_mapf_solution(grid, starts, goals, plan)}")
+
+        # save result
+        save_configs_for_visualizer(plan, args.output_file)
+
+    elif args.pibt_version == "lacam":
+        from pylacam.src.pycam.lacam import LaCAM
+        
+        print(f"Using LaCAM")
+        
+        grid = parse_map(args.map_file)
+        starts, goals = get_scenario(args.scen_file, args.num_agents)
+
+        # solve MAPF
+        planner = LaCAM()
+        solution = planner.solve(
+            grid=grid,
+            starts=starts,
+            goals=goals,
+            seed=args.seed,
+            time_limit_ms=args.time_limit_ms,
+            flg_star=args.flg_star,
+            verbose=args.verbose,
+        )
+
+        # validation: True -> feasible solution
+        print(f"solved: {is_valid_mapf_solution(grid, starts, goals, solution)}")
+
+        # save result
+        save_configs_for_visualizer(solution, args.output_file)

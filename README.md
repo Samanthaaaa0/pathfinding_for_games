@@ -28,3 +28,5 @@ fail~
 poetry run python app.py -m assets/random-32-32-20.map -i assets/scen/random-32-32-20-random-5.scen -N 200
 
 poetry run python app.py -m assets/random-32-32-20.map -i assets/scen/random-32-32-20-random-15.scen -N 100
+
+poetry run python app.py -m assets/warehouse-20-40-10-2-1.map -i assets/scen/warehouse-20-40-10-2-1-random-1.scen -N 50
