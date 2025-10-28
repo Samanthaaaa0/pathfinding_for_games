@@ -74,9 +74,6 @@ class PIBT:
             candidate=candidate[:candidate.index(i_from[i])]
             print(candidate)
 
-        potential_swap_candidates = set()
-        # all_blocking_lower_priority = True
-        # has_blocking=False
         max_blocking_a=-1
         for v in candidate:            
 
