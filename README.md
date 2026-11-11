@@ -1,32 +1,101 @@
-# pibt_rip
+# Robust PIBT Pathfinding Algorithm for Multi-Agent Systems
 
-poetry run python app.py -m assets/random-32-32-10.map -i assets/random-32-32-10-random-1.scen -N 200
-mapf-visualizer ./assets/random-32-32-10.map ./output.txt
+An Honours research project investigating improvements to Priority Inheritance with Backtracking (PIBT), a priority-based algorithm for multi-agent pathfinding.
 
-poetry run python3 app.py -m assets/pushmap.map -i assets/pushmap-random-1.scen -N 4
-mapf-visualizer ./assets/pushmap.map ./output.txt
+## Overview
 
+Multi-agent pathfinding (MAPF) involves coordinating multiple agents navigating a shared environment while avoiding collisions and reaching their respective destinations.
 
-poetry run python app.py -m assets/small.map -i assets/small-random-1.scen -N 2
-mapf-visualizer ./assets/small.map ./output.txt
+Priority Inheritance with Backtracking (PIBT) is a decentralised approach that assigns priorities to agents and uses backtracking to resolve movement conflicts.
 
-poetry run python app.py -m assets/tunnel.map -i assets/tunnel.scen -N 4
-mapf-visualizer ./assets/tunnel.map ./output.txt
+However, certain configurations can cause agents to become trapped in deadlocks or repeatedly move without making meaningful progress, resulting in livelocks.
 
+This project investigates ways to improve the robustness of PIBT by identifying these failure cases and implementing additional strategies to help agents continue navigating the environment.
 
-poetry run python app.py -m assets/maze-128-128-1.map -i assets/scen/maze-128-128-1-random-1.scen -N 200
-mapf-visualizer ./assets/maze-128-128-1.map ./output.txt
+## Research Objectives
 
-todo:
-poetry run python3 app.py -m assets/corswap.map -i assets/corswap.scen -N 10
-mapf-visualizer ./assets/corswap.map ./output.txt
+The main objectives were to:
 
-poetry run python app.py -m assets/random-32-32-20.map -i assets/scen/random-32-32-20-random-4.scen -N 200
-mapf-visualizer ./assets/random-32-32-20.map ./output.txt
+- Investigate the behaviour and limitations of the baseline PIBT algorithm.
+- Identify scenarios that lead to deadlocks and livelocks.
+- Develop additional strategies to address these failure cases.
+- Evaluate the effectiveness of the proposed improvements through simulation and experimentation.
 
-fail~
-poetry run python app.py -m assets/random-32-32-20.map -i assets/scen/random-32-32-20-random-5.scen -N 200
+## Implementation
 
-poetry run python app.py -m assets/random-32-32-20.map -i assets/scen/random-32-32-20-random-15.scen -N 100
+**Language:** Python
 
-poetry run python app.py -m assets/warehouse-20-40-10-2-1.map -i assets/scen/warehouse-20-40-10-2-1-random-1.scen -N 50
+The algorithm was implemented and evaluated in a 2D grid environment with the following assumptions:
+
+- Static environment with fixed obstacles.
+- Synchronous agent movement.
+- Homogeneous agents with the same movement capabilities.
+- Multiple agents navigating the same grid.
+
+### Baseline PIBT
+
+The baseline algorithm uses priority inheritance and backtracking to resolve movement conflicts between agents.
+
+Each agent is assigned a priority, which determines the order in which movement decisions are considered. When an agent cannot move to its preferred location, priority inheritance and backtracking are used to explore alternative movements.
+
+### Deadlock Resolution
+
+Deadlocks occur when agents block one another and cannot make progress.
+
+The project investigates blocking relationships between agents and introduces additional resolution strategies, including:
+
+- Push-and-Swap strategies.
+- Corridor swap handling.
+- Frozen priority mechanisms.
+
+These approaches aim to resolve situations where agents become mutually blocked.
+
+### Livelock Resolution
+
+Livelocks occur when agents continue moving but fail to make meaningful progress towards their destinations.
+
+A push-counter matrix was introduced to track repeated pushing behaviour and help identify problematic movement patterns.
+
+This information was used to guide additional movement decisions and reduce repeated unproductive interactions.
+
+## Evaluation
+
+The project involved testing the baseline and modified algorithms across different grid configurations and agent scenarios.
+
+The experiments focused on:
+
+- Identifying deadlock and livelock scenarios.
+- Observing agent movement and algorithm behaviour.
+- Comparing different resolution strategies.
+- Evaluating the effectiveness of the proposed improvements.
+
+## Technologies
+
+- **Language:** Python
+- **Domain:** Algorithms and Data Structures
+- **Research Areas:** Multi-Agent Pathfinding, Graph Search, Deadlock Detection, Algorithm Optimisation
+
+## Repository Contents
+
+The repository contains the implementation, experimental materials and supporting research documentation.
+
+*Update this section with the final folder structure if the repository contains separate source, experiment and documentation directories.*
+
+## Scope and Limitations
+
+This research focuses on a controlled 2D grid environment with static obstacles, synchronous movement and homogeneous agents.
+
+The findings are therefore evaluated within this defined environment and do not establish performance across all MAPF environments or more complex real-world scenarios.
+
+## Research Documentation
+
+For the complete methodology, implementation details, experiments and findings, refer to the Honours thesis:
+
+**[PIBT Honours Thesis](./public/thesis/PIBT-Thesis.pdf)**
+
+## Author
+
+**Samantha Oh**
+
+Bachelor of Computer Science (Honours)  
+Monash University
