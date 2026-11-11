@@ -2,6 +2,8 @@
 
 An Honours research project investigating improvements to Priority Inheritance with Backtracking (PIBT), a priority-based algorithm for multi-agent pathfinding.
 
+Thesis Link: https://samanthaaaa0.github.io/Portfolio/thesis/PIBT-Thesis.pdf 
+
 ## Overview
 
 Multi-agent pathfinding (MAPF) involves coordinating multiple agents navigating a shared environment while avoiding collisions and reaching their respective destinations.
@@ -90,8 +92,6 @@ The findings are therefore evaluated within this defined environment and do not 
 ## Research Documentation
 
 For the complete methodology, implementation details, experiments and findings, refer to the Honours thesis:
-
-**[PIBT Honours Thesis](./public/thesis/PIBT-Thesis.pdf)**
 
 ## Author
 
